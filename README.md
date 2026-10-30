@@ -36,7 +36,7 @@ placement.
 ```sh
 cargo test
 horizon-mixins check --workspace /path/to/horizon \
-  --mods /path/to/All-Enough-Items --out /tmp/aei-stage \
+  --mods /path/to/All-Enough-Items/mixins --out /tmp/aei-stage \
   --trust-native-mods
 ```
 
@@ -62,5 +62,7 @@ silently represented as supported here.
 - `mixins/aei/horizon-mixin.toml` declares the module and hook points.
 - `compatibility.json` pins the Horizon and `horizon-mixins` revisions.
 
-The runtime is based on Horizon's official native Recipes viewer, adapted for
-the standalone AEI project under the MIT license; see [LICENSE](LICENSE).
+The AEI browser model and adapters in this repository are authored for this
+project by Murillo Deolino and contributors and are released under the MIT
+license; see [LICENSE](LICENSE). Integration uses Horizon's published
+native-hook contract and contains no source files from the game.
