@@ -4,5 +4,4 @@
 *.hnmod
 *.jar
 *.zip
-__pycache__/
 /.claude/settings.local.json

@@ -1,18 +1,16 @@
-[package]
-name = "horizon-mod-aei"
-version = "0.1.5"
+# AEI development workspace.
+#
+# `mixins/aei/` is the bundle Horizon builds; its engine crate is self-contained
+# (no `workspace = true` fields) because Horizon copies it out of this workspace.
+# `xtask` holds the development commands: `cargo xtask check|package|ui-test`.
+[workspace]
+members = ["mixins/aei/engine", "xtask"]
+resolver = "3"
+
+[workspace.package]
 edition = "2024"
 license = "MIT"
 publish = false
-description = "All Enough Items recipe and usage browser for Horizon, distributed as a native mod."
 
-# The local crate root exposes the engine crate to rust-analyzer and tests.
-[lib]
-path = "src/lib.rs"
-
-[dependencies]
-aei-engine = { path = "mixins/aei/engine" }
-
-[workspace]
-members = [".", "mixins/aei/engine"]
-resolver = "2"
+[profile.dev.package.xtask]
+debug = false

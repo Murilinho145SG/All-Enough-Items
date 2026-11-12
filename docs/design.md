@@ -23,7 +23,7 @@ Panels, slots, tabs and arrows are drawn with primitives (`recipe_paint.rs`);
 items and text use Horizon's own item renderer and fonts. The layout follows
 public JEI screenshots and control documentation only
 (https://www.curseforge.com/minecraft/mc-mods/jei). No JEI implementation,
-textures or licence files are part of this repository, and `tools/check.py`
+textures or licence files are part of this repository, and `cargo xtask check`
 rejects reintroducing a JEI asset folder. Avoiding textures also removes PNG
 decoding and per-frame atlas uploads.
 
@@ -49,14 +49,25 @@ refreshes the placement (`+`) actions. Shutdown clearing happens in one place.
 Recipe placement always goes through the vanilla recipe book, so learned
 recipes and the server's rules stay authoritative.
 
+## Workspace layout
+
+The repository root is a virtual Cargo workspace with two members: the engine
+(`mixins/aei/engine`) and `xtask`, which holds the development commands so the
+whole project is driven through Cargo. Inside the bundle, `modules/` holds the
+support modules injected into `horizon-client` and `hooks/` holds one helper per
+injection, so `horizon-mixin.toml` reads as a map of the integration. The engine
+crate stays self-contained (no `workspace = true` fields) because Horizon copies
+it out of this workspace to build it.
+
 ## Compatibility pins in one place
 
 The Horizon revision, horizon-mixins revision, hook version, mod id and version
 appear in `compatibility.json`, `horizon-native.json`,
-`mixins/aei/horizon-mixin.toml` and both `Cargo.toml` files. `tools/check.py`
+`mixins/aei/horizon-mixin.toml` and the engine's `Cargo.toml`. `cargo xtask check`
 fails if any of them disagree, and also checks that every file under
 `mixins/aei/` is one Horizon accepts in a bundle. Injected helpers are not part
-of the Cargo workspace, so the check formats them with `rustfmt` separately.
+of the Cargo build, so the check formats `modules/` and `hooks/` with `rustfmt`
+separately.
 
 ## Known contract limits
 
@@ -69,10 +80,10 @@ worked around:
 
 ## Verification
 
-- `python3 tools/check.py`: pins, bundle contents, formatting, Clippy and the
+- `cargo xtask check`: pins, bundle contents, formatting, Clippy and the
   engine regression tests.
 - `horizon-mixins check` against a clean checkout of the pinned Horizon revision
   compiles and tests the injected client (see the README).
-- `tools/test_viewer.py` drives a disposable running game through pagination,
+- `cargo xtask ui-test` drives a disposable running game through pagination,
   wheel input, categories, history, search and modal clicks, and saves
   screenshots outside the repository.
