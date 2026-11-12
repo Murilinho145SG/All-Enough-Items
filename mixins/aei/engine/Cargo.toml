@@ -1,0 +1,7 @@
+[package]
+name = "aei-engine"
+version = "0.1.5"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "The standalone browser model used by the AEI Horizon mod."
