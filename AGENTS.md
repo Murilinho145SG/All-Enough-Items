@@ -20,5 +20,6 @@ AEI is a client-side native Horizon mod that provides a searchable item catalogu
 ## Development
 
 - This repository is a `horizon-mixins` native-mod bundle. Keep compatibility pins synchronized in `compatibility.json` and `mixins/aei/horizon-mixin.toml`.
+- The root is a Cargo workspace (the engine and `xtask`). Run `cargo xtask check` before committing; keep injected support modules in `mixins/aei/modules/` and injection helpers in `mixins/aei/hooks/`.
 - Follow Horizon's `AGENTS.md`, the native-mod trust model, vanilla behavior requirements, and the rule that Horizon-only UI features stay off by default when they change the vanilla look.
 - Keep this repository free of generated game data, game assets, and mod binaries.

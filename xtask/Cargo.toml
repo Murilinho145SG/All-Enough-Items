@@ -1,0 +1,13 @@
+[package]
+name = "xtask"
+version = "0.0.0"
+description = "Development commands for AEI: check, package and ui-test."
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json = "1"
+sha2 = "0.10"
+toml = "0.8"
+zip = { version = "2", default-features = false, features = ["deflate"] }

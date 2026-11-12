@@ -16,25 +16,25 @@ dependent = "horizon-client"
 id = "runtime"
 file = "crates/horizon-client/src/game.rs"
 name = "aei"
-source = "runtime.rs"
+source = "modules/runtime.rs"
 
 [[module]]
 id = "glue"
 file = "crates/horizon-client/src/game.rs"
 name = "aei_glue"
-source = "glue.rs"
+source = "modules/glue.rs"
 
 [[module]]
 id = "center_recipe"
 file = "crates/horizon-client/src/game/native_panel.rs"
 name = "aei_recipe_overlay"
-source = "centered_recipe_overlay.rs"
+source = "modules/centered_recipe_overlay.rs"
 
 [[module]]
 id = "recipe_paint"
 file = "crates/horizon-client/src/game/native_panel.rs"
 name = "aei_recipe_paint"
-source = "recipe_paint.rs"
+source = "modules/recipe_paint.rs"
 
 [[injection]]
 id = "creative_panel"
@@ -43,7 +43,7 @@ target = "horizon_client::game::native_panel::Game<'_>::browser_sync"
 selector = 'self.screen == Screen::Creative && of.0.native_id() != "recipes"'
 require = 1
 ordinal = 0
-helper = "creative_panel.rs"
+helper = "hooks/creative_panel.rs"
 bindings = [
   { name = "value", ty = "bool", value = "$value" },
   { name = "owner", ty = "&(Owner, u64)", value = "$local_ref:of:0" },
@@ -53,7 +53,7 @@ bindings = [
 id = "list"
 kind = "HEAD"
 target = "horizon_client::game::native_hooks::Game<'_>::native_mods"
-helper = "list.rs"
+helper = "hooks/list.rs"
 bindings = [
   { name = "mods", ty = "&mut Vec<crate::game::native_hooks::NativeMod>", value = "&mut *mods" },
 ]
@@ -62,7 +62,7 @@ bindings = [
 id = "settings"
 kind = "HEAD"
 target = "horizon_client::game::native_hooks::Game<'_>::native_settings"
-helper = "settings.rs"
+helper = "hooks/settings.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
   { name = "mod_id", ty = "&str", value = "mod_id" },
@@ -73,7 +73,7 @@ bindings = [
 id = "click"
 kind = "HEAD"
 target = "horizon_client::game::native_hooks::Game<'_>::native_settings_click"
-helper = "click.rs"
+helper = "hooks/click.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
   { name = "mod_id", ty = "&str", value = "mod_id" },
@@ -84,7 +84,7 @@ bindings = [
 id = "frame"
 kind = "HEAD"
 target = "horizon_client::game::native_hooks::Game<'_>::native_frame"
-helper = "frame.rs"
+helper = "hooks/frame.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
 ]
@@ -93,7 +93,7 @@ bindings = [
 id = "event"
 kind = "HEAD"
 target = "horizon_client::game::native_hooks::Game<'_>::native_panel_event"
-helper = "event.rs"
+helper = "hooks/event.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
   { name = "mod_id", ty = "&str", value = "mod_id" },
@@ -105,7 +105,7 @@ id = "center_recipe_draw"
 kind = "HEAD"
 cancellable = true
 target = "horizon_client::game::native_panel::Game<'_>::draw_mod_browser"
-helper = "centered_recipe_draw.rs"
+helper = "hooks/centered_recipe_draw.rs"
 bindings = [
   { name = "game", ty = "&mut Game<'_>", value = "&mut *self" },
   { name = "batch", ty = "&mut HudBatch", value = "&mut *batch" },
@@ -116,7 +116,7 @@ id = "center_recipe_press"
 kind = "HEAD"
 cancellable = true
 target = "horizon_client::game::native_panel::Game<'_>::mod_browser_press"
-helper = "centered_recipe_press.rs"
+helper = "hooks/centered_recipe_press.rs"
 bindings = [
   { name = "game", ty = "&mut Game<'_>", value = "&mut *self" },
   { name = "right", ty = "bool", value = "right" },
@@ -127,7 +127,7 @@ id = "center_recipe_pointed"
 kind = "HEAD"
 cancellable = true
 target = "horizon_client::game::native_panel::Game<'_>::mod_browser_pointed"
-helper = "centered_recipe_pointed.rs"
+helper = "hooks/centered_recipe_pointed.rs"
 bindings = [
   { name = "game", ty = "&mut Game<'_>", value = "&mut *self" },
 ]
@@ -137,7 +137,7 @@ id = "center_recipe_back"
 kind = "HEAD"
 cancellable = true
 target = "horizon_client::game::native_panel::Game<'_>::mod_browser_back"
-helper = "centered_recipe_back.rs"
+helper = "hooks/centered_recipe_back.rs"
 bindings = [
   { name = "game", ty = "&mut Game<'_>", value = "&mut *self" },
 ]
@@ -146,7 +146,7 @@ bindings = [
 id = "recipe_scroll"
 kind = "HEAD"
 target = "horizon_client::game::native_hooks::Game<'_>::native_screen_mouse_scrolled_pre"
-helper = "recipe_scroll.rs"
+helper = "hooks/recipe_scroll.rs"
 bindings = [
   { name = "game", ty = "&crate::game::Game<'_>", value = "self" },
   { name = "scroll", ty = "[f64; 2]", value = "scroll" },
@@ -158,7 +158,7 @@ id = "history_key"
 kind = "HEAD"
 cancellable = true
 target = "horizon_client::game::native_panel::Game<'_>::native_panel_key"
-helper = "history_key.rs"
+helper = "hooks/history_key.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
   { name = "key", ty = "&str", value = "key" },
@@ -169,7 +169,7 @@ id = "hide_container"
 kind = "HEAD"
 cancellable = true
 target = "horizon_client::game::Game<'_>::draw_inventory"
-helper = "hide_container.rs"
+helper = "hooks/hide_container.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
   { name = "batch", ty = "&horizon_client::hud::HudBatch", value = "&*batch" },
@@ -180,7 +180,7 @@ id = "modal_hotkey"
 kind = "HEAD"
 cancellable = true
 target = "horizon_client::game::Game<'_>::inventory_hotkey"
-helper = "modal_hotkey.rs"
+helper = "hooks/modal_hotkey.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
 ]
@@ -190,7 +190,7 @@ id = "modal_pick_press"
 kind = "HEAD"
 cancellable = true
 target = "horizon_client::game::Game<'_>::inventory_pick_press"
-helper = "modal_pick_press.rs"
+helper = "hooks/modal_pick_press.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
 ]
@@ -200,7 +200,7 @@ id = "modal_pick_release"
 kind = "HEAD"
 cancellable = true
 target = "horizon_client::game::Game<'_>::inventory_pick_release"
-helper = "modal_pick_release.rs"
+helper = "hooks/modal_pick_release.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
 ]
@@ -210,7 +210,7 @@ id = "modal_mouse_release"
 kind = "HEAD"
 cancellable = true
 target = "horizon_client::game::Game<'_>::inventory_mouse_release"
-helper = "modal_mouse_release.rs"
+helper = "hooks/modal_mouse_release.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
 ]
