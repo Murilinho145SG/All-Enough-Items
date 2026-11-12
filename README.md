@@ -1,68 +1,104 @@
 # All Enough Items
 
-All Enough Items (AEI) is a searchable item and recipe browser for Horizon. It is
-distributed as a native Horizon mod in this repository, independently of the
-game source.
+All Enough Items (AEI) is a client-side item and recipe browser, distributed
+through Horizon's native mod system.
 
-## What works
+- Search item names and identifiers, namespaces (`@minecraft`), tags (`#logs`)
+  and explicit identifiers (`&minecraft:oak_log`). Combine terms, quoted phrases,
+  exclusions (`-`) and alternatives (`|`).
+- Hover an item and press **R** for recipes or **U** for uses. In the catalogue,
+  left-click shows recipes and right-click shows uses.
+- Browse a centered recipe viewer with category tabs above the window, a catalyst
+  on the left, category and page navigation, beveled recipe cards, full crafting
+  grids and output slots. The item catalogue remains on the right when it fits.
+- Click ingredients to follow recipes, click the category title to browse
+  recipes from that category, and use **Left/Right** to navigate lookup history.
+- Press **Ctrl+F** to focus the search field.
+- Scroll or click arrows to turn pages. Right-click the search field to clear it.
+- Click **+** to place a known recipe through the vanilla recipe book;
+  **Shift-click** requests as many sets as the player's inventory permits.
 
-- Browse items beside inventory and container screens.
-- Search by item name or id, namespace (`@minecraft`) and tag (`#logs`).
-- Open recipes with **R** and uses with **U**, or use left and right clicks on
-  panel items and recipe ingredients.
-- Browse recipes by station, inspect ingredient alternatives and return through
-  lookup history.
-- Place a recipe the player's recipe book knows into the open crafting grid.
-- Optionally give items from the panel in Creative mode.
+Recipes, stack components, item rendering, fonts and translations come from
+Horizon's native API. Recipe placement remains subject to the player's learned
+recipes and the server's normal recipe-book rules. The vanilla recipe book is
+preserved.
 
-Recipes come from Horizon's native recipe tables and retain item components for
-display. On other servers, the viewer shows the recipes the client has received;
-recipe placement remains subject to the server's normal recipe-book rules.
+The viewer follows the public [JEI screenshots and control documentation](https://www.curseforge.com/minecraft/mc-mods/jei).
+Its graphics are original drawing primitives; no JEI implementation or assets
+are included. Full JEI feature parity is not claimed: the pinned native contract
+provides crafting, cooking, stonecutting, smithing and brewing, but not dynamic
+anvil, grindstone, fuel or compost categories. AEI extends Horizon's creative
+inventory panel guard for its own recipe viewer and leaves the vanilla recipe
+book panel available. The viewer works from any inventory screen Horizon opens;
+each query/category shows at most 256 recipes, matching the native API limit.
 
 ## Install
 
-The Horizon launcher can install a native mod from this GitHub repository. Open
-**Mods → Add from GitHub**, enter this repository URL, install **AEI**, then build
-the native-mod game when the launcher offers it. Native mods run as compiled Rust
-with the player's account permissions. Horizon shows a trust warning before
-building them.
+In Horizon, select **Mods → Add from GitHub**, enter this repository URL and
+install AEI (or run `horizon-launcher mods add-github <url> --trust-native-code`).
+Horizon displays the native-code trust notice before building the instance.
+Native mods run with the player's account permissions.
 
-## Build from source
+The launcher installs the latest release's `.hnmod` asset when there is one;
+otherwise it builds the pinned commit from source. Both use the revisions in
+`horizon-native.json`.
 
-This is a `horizon-mixins` bundle. Its compatibility file requires native hook
-API 2, which provides the item panel, recipe pages, lookups and recipe-book
-placement.
+## Develop and verify
 
 ```sh
-cargo test
-horizon-mixins check --workspace /path/to/horizon \
-  --mods /path/to/All-Enough-Items/mixins --out /tmp/aei-stage \
-  --trust-native-mods
+python3 tools/check.py
+horizon-mixins check --workspace /path/to/pinned/horizon \
+  --mods /path/to/aei/mixins --out /tmp/aei-stage \
+  --trust-native-mods --package horizon-client
 ```
 
-The bundle pins a Horizon revision and a `horizon-mixins` revision in
-`compatibility.json`. Use the `horizon-mixins` revision listed there when
-building manually. The Horizon launcher resolves and builds these dependencies
-for GitHub installations.
+`tools/check.py` validates that the compatibility pins and versions agree, that
+every file under `mixins/aei/` is one Horizon accepts in a bundle, source
+hygiene, formatting of the engine and the injected helpers, Clippy and the
+engine tests.
 
-## Current coverage
+The second command compiles and tests the injected game in a scratch staging
+directory, leaving the Horizon source unchanged. Use a clean git checkout of the
+exact revision in `compatibility.json`. Keep game runs and all packaged
+artifacts outside the source tree, with fresh game directories and scratch homes
+as Horizon requires.
 
-The native recipe API currently exposes crafting, smelting, blasting, smoking,
-campfire cooking, stonecutting, smithing and brewing. The original in-game AEI
-also had dynamic anvil, grindstone, fuel and compost categories, and could fill
-compatible menus without relying on the recipe book. Those need additional
-native hook support before this mod can match that behavior; they are not
-silently represented as supported here.
+For a disposable game already running with a control socket, run
+`python3 tools/test_viewer.py /tmp/test-game/ctl.sock --out /tmp/aei-ui`
+to exercise real clicks, scrolling, categories, history and search and capture
+screenshots outside the repository.
 
-## Project structure
+## Release
 
-- `mixins/aei/runtime.rs` contains the viewer state, search and recipe lookup
-  logic; it also contains the logic tests.
-- `mixins/aei/glue.rs` adapts Horizon's native hook data to the viewer.
-- `mixins/aei/horizon-mixin.toml` declares the module and hook points.
-- `compatibility.json` pins the Horizon and `horizon-mixins` revisions.
+1. Bump the version in `Cargo.toml`, `mixins/aei/engine/Cargo.toml`,
+   `mixins/aei/horizon-mixin.toml` and `horizon-native.json`. When moving to a
+   new Horizon revision, update the pins in `compatibility.json`,
+   `horizon-native.json` and `[compatibility]` in `horizon-mixin.toml` together.
+2. Run both verification commands above.
+3. Run `python3 tools/package.py` to write a reproducible
+   `dist/aei-<version>.hnmod` and its `.sha256` (`dist/` is ignored by git).
+4. Attach the `.hnmod` to a GitHub release of the tagged commit.
 
-The AEI browser model and adapters in this repository are authored for this
-project by Murillo Deolino and contributors and are released under the MIT
-license; see [LICENSE](LICENSE). Integration uses Horizon's published
-native-hook contract and contains no source files from the game.
+## Structure
+
+All paths below are relative to `mixins/aei/`, the bundle Horizon builds.
+
+- `horizon-mixin.toml`: the mod, its pins, support modules and hook injections.
+- `engine/src/browser.rs`: event dispatch.
+- `engine/src/browser/search.rs`: catalogue filtering and search grammar.
+- `engine/src/browser/recipes.rs`: recipe indexing and presentation.
+- `engine/src/browser/history.rs`: lookup history.
+- `engine/src/viewer.rs`: renderer-independent recipe geometry and pagination.
+- `engine/src/types.rs`: browser models and actions.
+- `runtime.rs`: mod identity, key bindings and the engine re-exports.
+- `glue.rs`: native table lifecycle, model conversion and actions.
+- `centered_recipe_overlay.rs`: recipe rendering and modal interaction.
+- `recipe_paint.rs`: original panel, slot, arrow and button drawing.
+- The remaining `*.rs` files are the small helpers each injection calls.
+
+Outside the bundle: `src/lib.rs` exposes the engine to Cargo tooling,
+`compatibility.json` and `horizon-native.json` hold the distribution pins,
+`tools/` holds the check, packaging and UI test scripts, and `docs/design.md`
+records the structural decisions and their reasons.
+
+AEI is MIT licensed; see [LICENSE](LICENSE).
