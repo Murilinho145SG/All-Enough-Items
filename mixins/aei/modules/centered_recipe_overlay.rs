@@ -753,7 +753,15 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
     if game.carried.is_some() {
         game.draw_carried(batch);
     } else if let Some(title) = tab_title {
-        game.draw_tooltip_lines(batch, &[(title, u32::MAX)], cursor.0, cursor.1);
+        // JEI names the category and the mod that adds it.
+        let lines = [
+            (horizon_client::text::Text::legacy(&title), u32::MAX),
+            (
+                horizon_client::text::Text::legacy("\u{a7}9\u{a7}oMinecraft"),
+                u32::MAX,
+            ),
+        ];
+        game.draw_tooltip_lines(batch, &lines, cursor.0, cursor.1);
     } else if let Some(tip) = bookmark_tip {
         game.draw_tooltip_lines(batch, &[(tip.to_owned(), u32::MAX)], cursor.0, cursor.1);
     } else if let Some((_, transfer)) = screen
@@ -1043,8 +1051,20 @@ pub(super) fn pointed(game: &mut Game<'_>) -> ControlFlow<Option<BrowserStack>> 
                 .map(|(_, _, stack)| stack)
                 .or_else(|| hovered_station(game, view)),
         ),
-        // Over the container itself, Horizon finds the slot's stack.
-        None => ControlFlow::Continue(()),
+        // A vanilla recipe book button: its result, as JEI reads the book.
+        None => match game.recipe_under_pointer() {
+            Some(index) => {
+                let entries = game.recipe_book_entries();
+                let stack = entries.get(index).map(|entry| BrowserStack {
+                    item: entry.result.item.to_string(),
+                    count: entry.result.count,
+                    components: crate::game::native_recipes::components(&entry.result),
+                });
+                ControlFlow::Break(stack)
+            }
+            // Over the container itself, Horizon finds the slot's stack.
+            None => ControlFlow::Continue(()),
+        },
     }
 }
 
