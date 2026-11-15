@@ -6,9 +6,10 @@ pub const KEY_RECIPE: [&str; 3] = ["recipe", "Show recipes", "key.keyboard.r"];
 pub const KEY_USES: [&str; 3] = ["uses", "Show uses", "key.keyboard.u"];
 pub const KEY_BACK: [&str; 3] = ["back", "Previous recipe lookup", "key.keyboard.left"];
 pub const KEY_FORWARD: [&str; 3] = ["forward", "Next recipe lookup", "key.keyboard.right"];
+pub const KEY_BOOKMARK: [&str; 3] = ["bookmark", "Bookmark item", "key.keyboard.a"];
 
 pub use aei_engine::{
-    Browser, Entry, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard, RecipeKind,
+    Bookmark, Browser, Entry, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard, RecipeKind,
     SearchMode, SearchModes, Stack, Update,
 };
 pub use aei_engine::{NOTE_SEPARATOR, SHAPELESS_NOTE, mod_name, viewer};

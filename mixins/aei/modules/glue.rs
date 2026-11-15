@@ -18,6 +18,43 @@ static MOD_NAMES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool:
 
 std::thread_local! {
     static BROWSER: std::cell::RefCell<Option<Session>> = const { std::cell::RefCell::new(None) };
+    /// The bookmarks as the overlay draws them: each stack, and whether it is a recipe's.
+    static BOOKMARKS: std::cell::RefCell<Vec<(NativeStack, bool)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+const SETTING_BOOKMARKS: &str = "bookmarks";
+
+/// The bookmark list: each stack, and whether it is a recipe bookmark.
+pub(super) fn bookmarks() -> Vec<(NativeStack, bool)> {
+    BOOKMARKS.with(|cell| cell.borrow().clone())
+}
+
+pub(super) fn bookmark_count() -> usize {
+    BOOKMARKS.with(|cell| cell.borrow().len())
+}
+
+/// Runs a bookmark event (click, recipe bookmark, move) and shows what it changed.
+pub(super) fn bookmark_event(game: &mut Game<'_>, event: model::Event) {
+    let known = game.native_known_recipes();
+    let give = flag(game, SETTING_GIVE);
+    let updates = with_browser(|browser| browser.handle(event, give, &known)).unwrap_or_default();
+    for update in updates {
+        if matches!(&update, model::Update::RecipeList(_)) {
+            game.aei_reset_viewer();
+        }
+        publish(game, update);
+    }
+}
+
+/// Whether card `card` of the shown recipe page is bookmarked.
+pub(super) fn recipe_bookmarked(card: usize) -> bool {
+    with_browser(|browser| browser.shown_recipe_bookmarked(card)).unwrap_or(false)
+}
+
+/// Whether card `card` of the shown recipe page can be bookmarked (it has an id).
+pub(super) fn recipe_bookmarkable(card: usize) -> bool {
+    with_browser(|browser| browser.shown_recipe_id(card).is_some()).unwrap_or(false)
 }
 
 fn with_browser<T>(run: impl FnOnce(&mut model::Browser) -> T) -> Option<T> {
@@ -178,6 +215,17 @@ fn card(source: &model::RecipeCard) -> NativeRecipeView {
 
 fn publish(game: &mut Game<'_>, update: model::Update) {
     match update {
+        model::Update::Bookmarks(list) => {
+            BOOKMARKS.with(|cell| {
+                *cell.borrow_mut() = list
+                    .iter()
+                    .map(|b| (native(&b.stack), b.recipe.is_some()))
+                    .collect();
+            });
+            if let Some(text) = with_browser(|browser| browser.bookmarks_text()) {
+                game.native_set_setting(model::ID, SETTING_BOOKMARKS, &text);
+            }
+        }
         model::Update::ItemList(items) => {
             game.native_panel_items(model::ID, items.iter().map(native).collect());
         }
@@ -210,6 +258,7 @@ fn publish(game: &mut Game<'_>, update: model::Update) {
 
 fn clear(game: &mut Game<'_>) {
     let had_session = BROWSER.with(|cell| cell.borrow_mut().take().is_some());
+    BOOKMARKS.with(|cell| cell.borrow_mut().clear());
     if had_session {
         game.aei_reset_catalogue();
         game.native_panel_recipes(model::ID, "", Vec::new(), 0, Vec::new());
@@ -239,6 +288,17 @@ pub(super) fn frame(game: &mut Game<'_>) {
             );
             browser.handle(model::Event::SetSearchModes(search_modes(game)), false, &[]);
             load_flags(game);
+            let saved = game
+                .native_setting(model::ID, SETTING_BOOKMARKS)
+                .unwrap_or_default();
+            if let model::Update::Bookmarks(list) = browser.load_bookmarks(&saved) {
+                BOOKMARKS.with(|cell| {
+                    *cell.borrow_mut() = list
+                        .iter()
+                        .map(|b| (native(&b.stack), b.recipe.is_some()))
+                        .collect();
+                });
+            }
             let initial = browser.set_catalogue(catalogue(game));
             *session = Some(Session {
                 tables,
@@ -294,7 +354,11 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
                 *key == game.native_mod_key(model::ID, model::KEY_BACK[0], model::KEY_BACK[2]);
             let is_forward = *key
                 == game.native_mod_key(model::ID, model::KEY_FORWARD[0], model::KEY_FORWARD[2]);
-            if is_back {
+            let is_bookmark = *key
+                == game.native_mod_key(model::ID, model::KEY_BOOKMARK[0], model::KEY_BOOKMARK[2]);
+            if is_bookmark {
+                model::Event::ToggleBookmark(stack(target))
+            } else if is_back {
                 model::Event::Back
             } else if is_forward {
                 model::Event::Forward

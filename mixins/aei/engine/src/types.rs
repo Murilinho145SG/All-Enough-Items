@@ -81,6 +81,14 @@ pub struct Entry {
     pub tabs: Vec<String>,
 }
 
+/// A bookmarked stack, or a bookmarked recipe shown by its output.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Bookmark {
+    pub stack: Stack,
+    /// A recipe bookmark's recipe id.
+    pub recipe: Option<String>,
+}
+
 /// How a prefixed search field takes part in searches (JEI's search modes).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SearchMode {
@@ -226,11 +234,33 @@ pub struct RecipePage {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
+    /// Bookmarks or un-bookmarks a stack (JEI's A key).
+    ToggleBookmark(Stack),
+    /// Bookmarks or un-bookmarks the recipe of card `n` on the shown page.
+    BookmarkRecipe(usize),
+    ClickBookmark {
+        index: usize,
+        right: bool,
+    },
+    /// Moves bookmark `from` to position `to`.
+    MoveBookmark {
+        from: usize,
+        to: usize,
+    },
     Search(String),
     SetSearchModes(SearchModes),
-    ClickItem { index: usize, right: bool },
-    Lookup { stack: Stack, uses: bool },
-    ClickRecipeIngredient { stack: Stack, right: bool },
+    ClickItem {
+        index: usize,
+        right: bool,
+    },
+    Lookup {
+        stack: Stack,
+        uses: bool,
+    },
+    ClickRecipeIngredient {
+        stack: Stack,
+        right: bool,
+    },
     SelectStation(usize),
     ShowCategory,
     Place(usize),
@@ -240,14 +270,21 @@ pub enum Event {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Update {
+    /// The bookmark list changed: show it and save [`crate::Browser::bookmarks_text`].
+    Bookmarks(Vec<Bookmark>),
     ItemList(Vec<Stack>),
     RecipeList(RecipePage),
-    Give { item: String, count: u32 },
+    Give {
+        item: String,
+        count: u32,
+    },
     PlaceKnownRecipe(i32),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Lookup {
+    /// A recipe shown first (an opened recipe bookmark's).
+    pub focus: Option<usize>,
     pub category: Option<Station>,
     pub item: Stack,
     pub uses: bool,

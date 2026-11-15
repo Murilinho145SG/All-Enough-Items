@@ -78,7 +78,7 @@ impl Browser {
             .map_or("minecraft:air", |item| item.id.as_str())
     }
 
-    fn as_stack(&self, ingredient: &Ingredient) -> Stack {
+    pub(super) fn as_stack(&self, ingredient: &Ingredient) -> Stack {
         Stack {
             id: self.item_id(ingredient).to_owned(),
             count: ingredient.count,
@@ -96,7 +96,7 @@ impl Browser {
         if lookup.category.is_some() {
             return (0..self.recipes.len()).collect();
         }
-        let Some(item) = self.items.iter().position(|item| item.id == lookup.item.id) else {
+        let Some(&item) = self.by_id.get(&lookup.item.id) else {
             return Vec::new();
         };
         let index = if lookup.uses {
@@ -124,7 +124,17 @@ impl Browser {
                         .any(|ingredient| self.item_matches_stack(ingredient, &lookup.item))
                 }
             })
-            .collect()
+            .collect::<Vec<_>>()
+            .into_iter()
+            // An opened recipe bookmark's recipe comes first.
+            .fold(Vec::new(), |mut ids, id| {
+                if Some(id) == lookup.focus {
+                    ids.insert(0, id);
+                } else {
+                    ids.push(id);
+                }
+                ids
+            })
     }
 
     pub(super) fn make_card(&self, recipe: &Recipe, known: &[i32]) -> RecipeCard {

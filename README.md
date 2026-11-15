@@ -28,6 +28,11 @@ through Horizon's native mod system.
   A slot whose alternatives are exactly a tag says so in its tooltip ("Accepts
   any: #minecraft:planks"), and with advanced tooltips (F3+H) an output shows its
   recipe id.
+- Press **A** over any item (the list, a recipe, an inventory slot) to bookmark
+  it, as in JEI; bookmarks line up on the left of the screen with their own
+  pages, open recipes and uses like the list, and are saved. The ribbon button
+  at the top right of each recipe bookmarks that recipe: its output joins the
+  list with a gold corner and opens on that recipe.
 - Press **Ctrl+F** to focus the search field.
 - Scroll or click arrows to turn pages. Right-click the search field to clear it.
 - Click **+** to move a recipe's ingredients into the crafting grid through the
@@ -45,7 +50,7 @@ preserved.
 The interface reproduces [JEI](https://www.curseforge.com/minecraft/mc-mods/jei)'s
 layout and controls (see `docs/design.md`). Its graphics are drawing primitives,
 vanilla GUI sprites and the JEI-style sprites Horizon already ships; no JEI
-implementation or assets are included. Bookmarks and the recipe sorting toggles are not implemented yet. Full JEI feature parity is not claimed: the pinned native contract
+implementation or assets are included. The recipe sorting toggles are not implemented yet. Full JEI feature parity is not claimed: the pinned native contract
 provides crafting, cooking, stonecutting, smithing and brewing, but not dynamic
 anvil, grindstone, fuel or compost categories. AEI extends Horizon's creative
 inventory panel guard for its own recipe viewer and leaves the vanilla recipe

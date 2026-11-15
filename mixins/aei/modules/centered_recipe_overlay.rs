@@ -7,7 +7,7 @@ use super::aei_recipe_paint as paint;
 use super::{BrowserEvent, BrowserStack, Game, Layout, Owner, inside};
 use crate::game::aei::{
     NOTE_SEPARATOR, SHAPELESS_NOTE,
-    viewer::{self, Category, Sidebar, Viewer},
+    viewer::{self, BookmarkList, Category, Sidebar, Viewer},
 };
 use crate::game::native_hooks::{NativeRecipeLayout, NativeRecipeView};
 use horizon_client::hud::{HudBatch, rgba};
@@ -27,6 +27,7 @@ struct Navigation {
 
 thread_local! {
     static ITEM_SCROLL: RefCell<i32> = const { RefCell::new(0) };
+    static BOOKMARK_PAGE: RefCell<usize> = const { RefCell::new(0) };
     static NAVIGATION: RefCell<Option<Navigation>> = const { RefCell::new(None) };
     static STARTED: Instant = Instant::now();
     static CYCLE: RefCell<Option<(Instant, f64)>> = const { RefCell::new(None) };
@@ -37,6 +38,7 @@ thread_local! {
 struct Screen {
     view: Option<Viewer>,
     items: Option<(Sidebar, Layout)>,
+    bookmarks: Option<BookmarkList>,
 }
 
 /// AEI's panel is up on a container screen.
@@ -113,6 +115,17 @@ fn gui_right(game: &Game<'_>, batch: &HudBatch, view: Option<&Viewer>) -> f32 {
     }
 }
 
+/// The left edge of the screen's GUI: the recipe window's station tab, or the container.
+fn gui_left(game: &Game<'_>, batch: &HudBatch, view: Option<&Viewer>) -> f32 {
+    if let Some(view) = view {
+        view.catalyst_tab[0]
+    } else if game.screen == crate::game::Screen::Creative {
+        Game::creative_origin(batch).0
+    } else {
+        game.container_image(batch).left as f32
+    }
+}
+
 fn screen(game: &Game<'_>, batch: &HudBatch, recipes: bool) -> Option<Screen> {
     let size = [batch.width, batch.height];
     let view = if recipes {
@@ -133,8 +146,17 @@ fn screen(game: &Game<'_>, batch: &HudBatch, recipes: bool) -> Option<Screen> {
         };
         (items, layout)
     });
+    let bookmarks = BookmarkList::new(
+        size,
+        gui_left(game, batch, view.as_ref()),
+        crate::game::aei_glue::bookmark_count(),
+    );
     // Without a recipe window, AEI only takes over when its list fits.
-    (view.is_some() || items.is_some()).then_some(Screen { view, items })
+    (view.is_some() || items.is_some()).then_some(Screen {
+        view,
+        items,
+        bookmarks,
+    })
 }
 
 /// Seconds the ingredients have cycled for: the clock stands still while Shift is held,
@@ -427,6 +449,11 @@ fn draw_recipes(
         if recipe.note == SHAPELESS_NOTE {
             paint::shapeless(game, batch, card.shapeless);
         }
+        if crate::game::aei_glue::recipe_bookmarkable(*index) {
+            let marked = crate::game::aei_glue::recipe_bookmarked(*index);
+            let name = format!("Bookmark recipe {index}");
+            paint::bookmark_button(game, batch, card.bookmark, marked, &name);
+        }
         if let Some(transfer) = transfer {
             let name = format!("Move recipe {index}");
             let enabled = *transfer != Transfer::Locked;
@@ -503,6 +530,83 @@ fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, items: &Sidebar, layout
     paint::settings_button(game, batch, items.settings, "AEI settings");
 }
 
+fn bookmark_page(list: &BookmarkList) -> (usize, usize) {
+    let pages = crate::game::aei_glue::bookmark_count()
+        .div_ceil(list.per_page())
+        .max(1);
+    let page = BOOKMARK_PAGE.with(|cell| {
+        let mut page = cell.borrow_mut();
+        *page = (*page).min(pages - 1);
+        *page
+    });
+    (page, pages)
+}
+
+/// The bookmark under the pointer: its index and stack.
+fn hovered_bookmark(game: &Game<'_>, list: &BookmarkList) -> Option<(usize, BrowserStack)> {
+    let (page, _) = bookmark_page(list);
+    let first = page * list.per_page();
+    let bookmarks = crate::game::aei_glue::bookmarks();
+    (0..list.per_page())
+        .find(|&offset| viewer::contains(list.slot(offset), game.cursor))
+        .and_then(|offset| {
+            let index = first + offset;
+            Some((index, bookmarks.get(index)?.0.clone()))
+        })
+}
+
+fn draw_bookmarks(game: &mut Game<'_>, batch: &mut HudBatch, list: &BookmarkList) {
+    let (page, pages) = bookmark_page(list);
+    let first = page * list.per_page();
+    let bookmarks = crate::game::aei_glue::bookmarks();
+    for (offset, (stack, recipe)) in bookmarks
+        .iter()
+        .skip(first)
+        .take(list.per_page())
+        .enumerate()
+    {
+        let rect = list.slot(offset);
+        draw_stack(
+            game,
+            batch,
+            stack,
+            rect,
+            &format!("Bookmark {}", first + offset),
+            true,
+        );
+        if *recipe {
+            paint::recipe_mark(game, batch, rect);
+        }
+    }
+    let [back, forward] = list.arrows();
+    let [x, y, w, h] = list.nav;
+    paint::strip(game, batch, [x + back[2], y, w - back[2] - forward[2], h]);
+    let label = format!("{}/{}", page + 1, pages);
+    if game.gui.atlas.font.width(&label) <= w - back[2] - forward[2] {
+        paint::title(game, batch, &label, list.nav);
+    }
+    paint::arrow_button(
+        game,
+        batch,
+        back,
+        false,
+        pages > 1,
+        "Previous bookmark page",
+    );
+    paint::arrow_button(game, batch, forward, true, pages > 1, "Next bookmark page");
+}
+
+fn turn_bookmark_page(list: &BookmarkList, forward: bool) {
+    let (page, pages) = bookmark_page(list);
+    BOOKMARK_PAGE.with(|cell| {
+        *cell.borrow_mut() = if forward {
+            (page + 1) % pages
+        } else {
+            (page + pages - 1) % pages
+        };
+    });
+}
+
 pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()> {
     if owned(game).is_none() {
         return ControlFlow::Continue(());
@@ -530,6 +634,9 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         draw_items(game, batch, items, layout);
     } else if let Some(search) = game.panel.search.as_mut() {
         search.focused = false;
+    }
+    if let Some(list) = &screen.bookmarks {
+        draw_bookmarks(game, batch, list);
     }
 
     let cursor = game.cursor;
@@ -563,11 +670,28 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         .or_else(|| {
             let (_, layout) = screen.items.as_ref()?;
             hovered_item(game, layout).map(|(_, stack)| stack)
+        })
+        .or_else(|| {
+            let list = screen.bookmarks.as_ref()?;
+            hovered_bookmark(game, list).map(|(_, stack)| stack)
         });
+    let bookmark_tip = screen.view.as_ref().and_then(|view| {
+        let (card, _) = view.cards.iter().find(|(i, card)| {
+            viewer::contains(card.bookmark, cursor)
+                && crate::game::aei_glue::recipe_bookmarkable(*i)
+        })?;
+        Some(if crate::game::aei_glue::recipe_bookmarked(*card) {
+            "Remove bookmark"
+        } else {
+            "Bookmark this recipe"
+        })
+    });
     if game.carried.is_some() {
         game.draw_carried(batch);
     } else if let Some(title) = tab_title {
         game.draw_tooltip_lines(batch, &[(title, u32::MAX)], cursor.0, cursor.1);
+    } else if let Some(tip) = bookmark_tip {
+        game.draw_tooltip_lines(batch, &[(tip.to_owned(), u32::MAX)], cursor.0, cursor.1);
     } else if let Some((_, transfer)) = screen
         .view
         .as_ref()
@@ -728,6 +852,14 @@ fn press_recipes(game: &mut Game<'_>, owner: &Owner, view: &Viewer, right: bool)
         if view.pages > 1 {
             turn_page(view, i == 1);
         }
+    } else if let Some((index, _)) = view.cards.iter().find(|(i, card)| {
+        viewer::contains(card.bookmark, game.cursor)
+            && crate::game::aei_glue::recipe_bookmarkable(*i)
+    }) {
+        let event = crate::game::aei::Event::BookmarkRecipe(*index);
+        crate::game::aei_glue::bookmark_event(game, event);
+        game.audio
+            .play("minecraft:ui.button.click", None, 0.25, 1.0);
     } else if let Some((recipe, slot, stack)) = hovered_recipe(game, view) {
         let event = BrowserEvent::SlotClicked {
             recipe: recipe as u32,
@@ -766,6 +898,25 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
         press_items(game, &owner, items, layout, right);
         return ControlFlow::Break(true);
     }
+    if let Some(list) = &screen.bookmarks
+        && inside(game.cursor, list.area)
+    {
+        if let Some(i) = list
+            .arrows()
+            .iter()
+            .position(|rect| viewer::contains(*rect, game.cursor))
+        {
+            turn_bookmark_page(list, i == 1);
+            game.audio
+                .play("minecraft:ui.button.click", None, 0.25, 1.0);
+            return ControlFlow::Break(true);
+        }
+        if let Some((index, _)) = hovered_bookmark(game, list) {
+            let event = crate::game::aei::Event::ClickBookmark { index, right };
+            crate::game::aei_glue::bookmark_event(game, event);
+            return ControlFlow::Break(true);
+        }
+    }
     match &screen.view {
         // The recipe window is modal: every other click is its own.
         Some(view) => {
@@ -792,6 +943,11 @@ pub(super) fn pointed(game: &mut Game<'_>) -> ControlFlow<Option<BrowserStack>> 
         && inside(game.cursor, items.area)
     {
         return ControlFlow::Break(hovered_item(game, layout).map(|(_, stack)| stack));
+    }
+    if let Some(list) = &screen.bookmarks
+        && let Some((_, stack)) = hovered_bookmark(game, list)
+    {
+        return ControlFlow::Break(Some(stack));
     }
     match &screen.view {
         Some(view) => ControlFlow::Break(
@@ -821,6 +977,15 @@ fn scroll(game: &Game<'_>, amount: f64) -> bool {
     let Some(screen) = screen(game, &batch, game.panel.recipes.is_some()) else {
         return false;
     };
+    if let Some(list) = &screen.bookmarks
+        && inside(game.cursor, list.area)
+        && (0..list.per_page()).any(|o| viewer::contains(list.slot(o), game.cursor))
+    {
+        if amount != 0.0 {
+            turn_bookmark_page(list, amount < 0.0);
+        }
+        return true;
+    }
     let over_items = screen
         .items
         .as_ref()

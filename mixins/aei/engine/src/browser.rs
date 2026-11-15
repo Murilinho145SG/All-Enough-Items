@@ -5,6 +5,7 @@ use crate::{
 use search::{Indexed, SearchQuery};
 use std::collections::HashMap;
 
+mod bookmarks;
 mod history;
 mod recipes;
 mod search;
@@ -29,6 +30,7 @@ pub struct Browser {
     query: String,
     search: SearchQuery,
     search_modes: SearchModes,
+    bookmarks: Vec<crate::Bookmark>,
     history: history::History,
     shown_recipe_ids: Vec<usize>,
 }
@@ -169,6 +171,7 @@ impl Browser {
 
     fn open_lookup(&mut self, target: Stack, uses: bool, known: &[i32]) -> Option<Update> {
         let candidate = Lookup {
+            focus: None,
             category: None,
             item: target,
             uses,
@@ -179,6 +182,11 @@ impl Browser {
         }
         self.history.push(candidate);
         Some(self.render_page(known))
+    }
+
+    fn push_lookup(&mut self, lookup: Lookup, known: &[i32]) -> Vec<Update> {
+        self.history.push(lookup);
+        vec![self.render_page(known)]
     }
 
     /// Closes the recipe view after a recipe was moved into the grid, as JEI does: back to
@@ -206,6 +214,25 @@ impl Browser {
 
     pub fn handle(&mut self, event: Event, give: bool, known: &[i32]) -> Vec<Update> {
         match event {
+            Event::ToggleBookmark(stack) => self.toggle_bookmark(stack),
+            Event::BookmarkRecipe(card) => self.bookmark_recipe(card),
+            Event::MoveBookmark { from, to } => self.move_bookmark(from, to),
+            Event::ClickBookmark { index, right } => {
+                let Some(bookmark) = self.bookmarks.get(index).cloned() else {
+                    return Vec::new();
+                };
+                match bookmark.recipe {
+                    Some(id) => self.open_recipe(&bookmark.stack, &id, known),
+                    None if give => vec![Update::Give {
+                        item: bookmark.stack.id,
+                        count: if right { 99 } else { 1 },
+                    }],
+                    None => self
+                        .open_lookup(bookmark.stack, right, known)
+                        .into_iter()
+                        .collect(),
+                }
+            }
             Event::Search(query) => {
                 self.search = SearchQuery::parse(&query, &self.search_modes);
                 self.query = query;
@@ -261,6 +288,7 @@ impl Browser {
                     .position(|s| s == station)
                     .unwrap_or(0);
                 let candidate = Lookup {
+                    focus: None,
                     category: Some(station),
                     item: Stack::default(),
                     uses: false,
@@ -564,6 +592,76 @@ mod tests {
         assert_eq!(browser.shown_slot_tag(0, 1), Some("test:wood"));
         assert_eq!(browser.shown_slot_tag(0, 2), None);
         assert_eq!(browser.shown_slot_tag(1, 0), None);
+    }
+
+    #[test]
+    fn bookmarks_toggle_open_lookups_and_focus_bookmarked_recipes() {
+        let (items, mut recipes) = fixture();
+        recipes[0].id = "minecraft:oak_planks".into();
+        // A second recipe for planks, so the bookmarked one must be put first.
+        let mut other = recipes[0].clone();
+        other.id = "test:planks_from_stick".into();
+        other.inputs = vec![vec![Ingredient {
+            item: 3,
+            count: 1,
+            components: String::new(),
+        }]];
+        recipes.insert(0, other);
+        let (mut browser, _) = Browser::new(items, recipes);
+        let planks = Stack {
+            id: "minecraft:oak_planks".into(),
+            count: 4,
+            components: String::new(),
+        };
+        let added = browser.handle(Event::ToggleBookmark(planks.clone()), false, &[]);
+        assert!(matches!(&added[0], Update::Bookmarks(b) if b.len() == 1 && b[0].stack.count == 1));
+        // Clicking a bookmark opens its uses (right) or recipes (left).
+        let page = browser.handle(
+            Event::ClickBookmark {
+                index: 0,
+                right: false,
+            },
+            false,
+            &[],
+        );
+        assert!(matches!(&page[0], Update::RecipeList(p) if p.title == "Recipes: Oak Planks"));
+        assert_eq!(browser.shown_recipe_id(0), Some("test:planks_from_stick"));
+        // Bookmark the second recipe; opening it shows that recipe first.
+        browser.handle(Event::BookmarkRecipe(1), false, &[]);
+        assert!(browser.shown_recipe_bookmarked(1));
+        let given = browser.handle(
+            Event::ClickBookmark {
+                index: 0,
+                right: false,
+            },
+            true,
+            &[],
+        );
+        assert!(
+            matches!(&given[0], Update::Give { item, count: 1 } if item == "minecraft:oak_planks")
+        );
+        browser.handle(
+            Event::ClickBookmark {
+                index: 1,
+                right: false,
+            },
+            false,
+            &[],
+        );
+        assert_eq!(browser.shown_recipe_id(0), Some("minecraft:oak_planks"));
+        assert!(browser.shown_recipe_bookmarked(0));
+        // Reorder, save and reload; toggling the stack again removes it.
+        browser.handle(Event::MoveBookmark { from: 1, to: 0 }, false, &[]);
+        let text = browser.bookmarks_text();
+        assert!(text.starts_with("recipe\t"));
+        let Update::Bookmarks(loaded) = browser.load_bookmarks(&text) else {
+            panic!("expected bookmarks")
+        };
+        assert_eq!(loaded.len(), 2);
+        let removed = browser.handle(Event::ToggleBookmark(planks), false, &[]);
+        assert!(
+            matches!(&removed[0], Update::Bookmarks(b) if b.len() == 1 && b[0].recipe.is_some())
+        );
     }
 
     #[test]

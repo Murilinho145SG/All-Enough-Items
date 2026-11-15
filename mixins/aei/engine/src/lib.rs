@@ -9,8 +9,8 @@ pub mod viewer;
 
 pub use browser::Browser;
 pub use types::{
-    Entry, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard, RecipeKind, RecipePage,
-    SearchMode, SearchModes, Stack, Update,
+    Bookmark, Entry, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard, RecipeKind,
+    RecipePage, SearchMode, SearchModes, Stack, Update,
 };
 pub(crate) use types::{Lookup, Station};
 

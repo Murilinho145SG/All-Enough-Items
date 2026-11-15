@@ -334,3 +334,35 @@ pub(super) fn highlight(game: &Game<'_>, batch: &mut HudBatch, item: (f32, f32))
         rgba(255, 255, 255, 0x80),
     );
 }
+
+/// The bookmark button of a recipe: a ribbon, gold when the recipe is bookmarked.
+pub(super) fn bookmark_button(
+    game: &Game<'_>,
+    batch: &mut HudBatch,
+    rect: Rect,
+    marked: bool,
+    name: &str,
+) {
+    button_face(game, batch, rect, true, name);
+    let [x, y, _, _] = rect;
+    let color = if marked {
+        rgba(255, 200, 40, 255)
+    } else {
+        white()
+    };
+    let shade = rgba(56, 56, 56, 255);
+    // A ribbon with a notch at its foot, shadowed like the "+".
+    fill(game, batch, [x + 5.0, y + 4.0, 5.0, 6.0], shade);
+    fill(game, batch, [x + 4.0, y + 3.0, 5.0, 6.0], color);
+    fill(game, batch, [x + 4.0, y + 9.0, 2.0, 1.0], color);
+    fill(game, batch, [x + 7.0, y + 9.0, 2.0, 1.0], color);
+}
+
+/// The mark of a recipe bookmark in the bookmark list: a gold corner.
+pub(super) fn recipe_mark(game: &Game<'_>, batch: &mut HudBatch, [x, y, _, _]: Rect) {
+    let gold = rgba(255, 200, 40, 255);
+    fill(game, batch, [x + 1.0, y + 1.0, 4.0, 1.0], gold);
+    fill(game, batch, [x + 1.0, y + 2.0, 3.0, 1.0], gold);
+    fill(game, batch, [x + 1.0, y + 3.0, 2.0, 1.0], gold);
+    fill(game, batch, [x + 1.0, y + 4.0, 1.0, 1.0], gold);
+}

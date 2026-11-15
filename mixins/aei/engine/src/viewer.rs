@@ -98,6 +98,8 @@ pub struct Card {
     pub flame: Option<Rect>,
     pub shapeless: Rect,
     pub action: Rect,
+    /// The bookmark button, top of the button column (the "+" is at its bottom).
+    pub bookmark: Rect,
     /// Right-aligned at the top (cooking experience).
     pub top_note: Rect,
     /// Centred at the bottom (cook time).
@@ -201,6 +203,7 @@ impl Card {
             flame,
             shapeless: [ox + cw - 8.0, oy, 8.0, 8.0],
             action: [x + area[2] + 2.0, y + area[3] - BUTTON, BUTTON, BUTTON],
+            bookmark: [x + area[2] + 2.0, y, BUTTON, BUTTON],
             top_note,
             bottom_note,
         }
@@ -383,9 +386,87 @@ impl Sidebar {
     }
 }
 
+/// The bookmark list left of a screen, as JEI shows it: a page bar over a grid, aligned
+/// to the screen's left edge.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BookmarkList {
+    /// Everything left of the screen's GUI: clicks here belong to the list.
+    pub area: Rect,
+    pub grid: (f32, f32),
+    pub columns: usize,
+    pub rows: usize,
+    pub nav: Rect,
+}
+
+impl BookmarkList {
+    /// The list beside a GUI whose left edge is `gui_left`, sized for `items` bookmarks.
+    /// None without bookmarks, or when fewer than three columns (room for the page
+    /// buttons) fit.
+    pub fn new(screen: [f32; 2], gui_left: f32, items: usize) -> Option<Self> {
+        let [_, sh] = screen;
+        let gui_left = gui_left.max(0.0);
+        let available_w = gui_left - 2.0 * PADDING;
+        let top = PADDING + BAR + 2.0;
+        let available_h = sh - top - PADDING;
+        let columns = ((available_w / SLOT).floor().max(0.0) as usize).min(MAX_ITEM_COLUMNS);
+        let mut rows = ((available_h / SLOT).floor().max(0.0) as usize).min(MAX_ITEM_ROWS);
+        if items == 0 || columns < 3 || rows < 1 {
+            return None;
+        }
+        if items <= columns * rows {
+            rows = items.div_ceil(columns).max(1);
+        }
+        let width = columns as f32 * SLOT;
+        Some(Self {
+            area: [0.0, 0.0, gui_left, sh],
+            grid: (PADDING, top),
+            columns,
+            rows,
+            nav: [PADDING, top - BAR - 2.0, width, BAR],
+        })
+    }
+
+    pub fn per_page(&self) -> usize {
+        self.columns * self.rows
+    }
+
+    /// The `offset`th cell of a page.
+    pub fn slot(&self, offset: usize) -> Rect {
+        let (x, y) = self.grid;
+        [
+            x + (offset % self.columns) as f32 * SLOT,
+            y + (offset / self.columns) as f32 * SLOT,
+            SLOT,
+            SLOT,
+        ]
+    }
+
+    pub fn arrows(&self) -> [Rect; 2] {
+        let [x, y, w, _] = self.nav;
+        [[x, y, BAR, BAR], [x + w - BAR, y, BAR, BAR]]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bookmarks_sit_left_of_the_gui_and_shrink_to_their_count() {
+        assert!(BookmarkList::new([480.0, 270.0], 160.0, 0).is_none());
+        assert!(BookmarkList::new([480.0, 270.0], 60.0, 5).is_none());
+        let list = BookmarkList::new([480.0, 270.0], 160.0, 5).unwrap();
+        assert_eq!(list.columns, 8);
+        assert_eq!(list.rows, 1);
+        let last = list.slot(list.per_page() - 1);
+        assert!(last[0] + last[2] <= 160.0 - 6.0);
+        let many = BookmarkList::new([480.0, 270.0], 160.0, 1000).unwrap();
+        let bottom = many.slot(many.per_page() - 1);
+        assert!(bottom[1] + bottom[3] <= 270.0);
+        for arrow in many.arrows() {
+            assert!(arrow[0] >= 0.0 && arrow[0] + arrow[2] <= 160.0);
+        }
+    }
 
     const SCREENS: [[f32; 2]; 3] = [[480.0, 270.0], [960.0, 506.0], [427.0, 240.0]];
 

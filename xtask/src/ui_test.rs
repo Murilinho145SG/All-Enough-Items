@@ -6,7 +6,7 @@ use crate::Result;
 use serde_json::{Value, json};
 use std::path::Path;
 
-const CHECKS: [&str; 11] = [
+const CHECKS: [&str; 12] = [
     "recipe pages",
     "scroll",
     "categories",
@@ -18,6 +18,7 @@ const CHECKS: [&str; 11] = [
     "return to catalogue",
     "prefixed search",
     "overlay toggle",
+    "bookmarks",
 ];
 
 #[cfg(not(unix))]
@@ -110,6 +111,14 @@ pub fn run(socket: &Path, out: &Path) -> Result {
     let field = game.field()?;
     game.send(&format!("click {field} right"))?;
     game.send("click-at 1 1")?;
+    // A over an item toggles its bookmark (the first item may already be one).
+    let before = game.bookmarks()?;
+    game.hover("Item 0")?;
+    game.send("key a tap")?;
+    ensure(game.bookmarks()? != before, "A toggles a bookmark")?;
+    game.hover("Item 0")?;
+    game.send("key a tap")?;
+    ensure(game.bookmarks()? == before, "A again toggles it back")?;
     // Ctrl+O hides the overlay and shows it again.
     for shown in [false, true] {
         game.send("key ctrl down")?;
@@ -218,6 +227,32 @@ impl Game {
             .labels()?
             .iter()
             .any(|label| label.starts_with("Item ") && label.contains(&needle)))
+    }
+
+    /// How many bookmarks the list shows on its page.
+    fn bookmarks(&mut self) -> Result<usize> {
+        Ok(self
+            .labels()?
+            .iter()
+            .filter(|label| label.starts_with("Bookmark ") && label.contains(": "))
+            .count())
+    }
+
+    /// Moves the pointer over the widget named `label` (a wheel turn of zero steps there).
+    fn hover(&mut self, label: &str) -> Result {
+        let widgets = self.widgets()?;
+        let bounds = widgets
+            .iter()
+            .find(|w| {
+                w["label"]
+                    .as_str()
+                    .is_some_and(|l| l.split(": ").next() == Some(label))
+            })
+            .and_then(|w| w["bounds"].as_array().cloned())
+            .ok_or_else(|| format!("no widget labelled {label:?}"))?;
+        let at = |i: usize| bounds.get(i).and_then(Value::as_f64).unwrap_or_default();
+        let (x, y) = (at(0) + at(2) / 2.0, at(1) + at(3) / 2.0);
+        self.send(&format!("scroll-at {x} {y} 0")).map(drop)
     }
 
     fn has_items(&mut self) -> Result<bool> {
