@@ -301,6 +301,12 @@ pub enum Event {
         from: usize,
         to: usize,
     },
+    /// Shows the shown category's recipes from `offset`, at most `len` of them (the
+    /// native panel holds 256 at a time, so longer lists are shown a window at a time).
+    ShowWindow {
+        offset: usize,
+        len: usize,
+    },
     Search(String),
     SetSearchModes(SearchModes),
     SetSort(SortOrder),

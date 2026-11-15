@@ -265,6 +265,8 @@ pub struct Viewer {
     pub page_label: Rect,
     pub pages: usize,
     pub page: usize,
+    /// Recipes a full page holds.
+    pub per_page: usize,
     pub cards: Vec<(usize, Card)>,
 }
 
@@ -364,6 +366,7 @@ impl Viewer {
             page_label: strip(top + 19.0),
             pages,
             page,
+            per_page,
             cards,
         })
     }

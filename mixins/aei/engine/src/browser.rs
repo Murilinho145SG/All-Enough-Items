@@ -41,6 +41,10 @@ pub struct Browser {
     edit_mode: bool,
     /// The recipe categories in tab order, without the hidden ones.
     categories: Vec<Station>,
+    /// The window of the shown category's recipes sent to the panel: offset and length.
+    window: (usize, usize),
+    /// How many recipes the shown category has in all.
+    window_total: usize,
     hidden_categories: Vec<Station>,
     history: history::History,
     shown_recipe_ids: Vec<usize>,
@@ -69,6 +73,7 @@ impl Browser {
             ..Self::default()
         };
         browser.categories = Station::ALL.to_vec();
+        browser.window = (0, RECIPE_LIMIT);
         browser.set_entries(Vec::new());
         let update = browser.item_list();
         (browser, update)
@@ -139,11 +144,15 @@ impl Browser {
             lookup.station = 0;
         }
         let current = available.get(lookup.station).copied();
-        let selected: Vec<usize> = all
+        let full: Vec<usize> = all
             .into_iter()
             .filter(|&index| Some(Station::of(self.recipes[index].kind)) == current)
-            .take(RECIPE_LIMIT)
             .collect();
+        self.window_total = full.len();
+        let len = self.window.1.clamp(1, RECIPE_LIMIT);
+        let offset = self.window.0.min(full.len().saturating_sub(1));
+        self.window.0 = offset;
+        let selected: Vec<usize> = full.into_iter().skip(offset).take(len).collect();
         let title_name = self
             .items
             .iter()
@@ -234,8 +243,34 @@ impl Browser {
             .then(|| self.render_page(known))
     }
 
+    /// The shown window of the category's recipes: its offset and the category's total.
+    pub fn shown_window(&self) -> (usize, usize) {
+        (self.window.0, self.window_total)
+    }
+
     pub fn handle(&mut self, event: Event, give: bool, known: &[i32]) -> Vec<Update> {
+        // A new view starts at its first window.
+        if matches!(
+            event,
+            Event::ClickItem { .. }
+                | Event::Lookup { .. }
+                | Event::ClickRecipeIngredient { .. }
+                | Event::ClickBookmark { .. }
+                | Event::SelectStation(_)
+                | Event::ShowCategory
+                | Event::Back
+                | Event::Forward
+        ) {
+            self.window.0 = 0;
+        }
         match event {
+            Event::ShowWindow { offset, len } => {
+                if self.history.current().is_none() {
+                    return Vec::new();
+                }
+                self.window = (offset, len.clamp(1, RECIPE_LIMIT));
+                vec![self.render_page(known)]
+            }
             Event::ToggleBookmark(stack) => self.toggle_bookmark(stack),
             Event::BookmarkRecipe(card) => self.bookmark_recipe(card),
             Event::MoveBookmark { from, to } => self.move_bookmark(from, to),
@@ -903,6 +938,47 @@ mod tests {
             super::recipes::fuel_note(200),
             "Smelts 1 item\nBurn time: 10s"
         );
+    }
+
+    #[test]
+    fn long_categories_are_shown_a_window_at_a_time() {
+        let (items, mut recipes) = fixture();
+        let template = recipes[0].clone();
+        recipes.extend((0..600).map(|i| Recipe {
+            id: format!("test:{i}"),
+            ..template.clone()
+        }));
+        let (mut browser, _) = Browser::new(items, recipes);
+        let log = Stack {
+            id: "minecraft:oak_log".into(),
+            count: 1,
+            components: String::new(),
+        };
+        let first = browser.handle(
+            Event::Lookup {
+                stack: log,
+                uses: true,
+            },
+            false,
+            &[],
+        );
+        assert!(matches!(&first[0], Update::RecipeList(p) if p.cards.len() == 256));
+        assert_eq!(browser.shown_window(), (0, 601));
+        let next = browser.handle(
+            Event::ShowWindow {
+                offset: 480,
+                len: 240,
+            },
+            false,
+            &[],
+        );
+        assert!(matches!(&next[0], Update::RecipeList(p) if p.cards.len() == 121));
+        assert_eq!(browser.shown_window(), (480, 601));
+        assert_eq!(browser.shown_recipe_id(0), Some("test:479"));
+        // A new view starts again at the top, keeping the window length.
+        browser.handle(Event::SelectStation(0), false, &[]);
+        assert_eq!(browser.shown_window(), (0, 601));
+        assert_eq!(browser.shown_book_ids().len(), 240);
     }
 
     #[test]

@@ -77,8 +77,9 @@ fuel and compostable categories from the items' own `fuel` and `compostable`
 components, and the anvil category (repairs and enchanted books) from the
 anvil's own rules. AEI extends Horizon's creative
 inventory panel guard for its own recipe viewer and leaves the vanilla recipe
-book panel available. The viewer works from any inventory screen Horizon opens;
-each query/category shows at most 256 recipes, matching the native API limit.
+book panel available. The viewer works from any inventory screen Horizon opens.
+The native panel holds 256 recipes at a time, so longer categories are sent a
+window at a time; the page numbers count the whole category.
 
 ## Install
 

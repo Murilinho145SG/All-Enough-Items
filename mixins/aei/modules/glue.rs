@@ -900,3 +900,20 @@ pub(super) fn lookup(game: &mut Game<'_>, target: &NativeStack, uses: bool) {
     };
     bookmark_event(game, event);
 }
+
+/// The shown category's recipe window: its offset and the category's total.
+pub(super) fn recipe_window() -> (usize, usize) {
+    with_browser(|browser| browser.shown_window()).unwrap_or((0, 0))
+}
+
+/// Shows another window of a long category, keeping the recipe window's own page.
+pub(super) fn show_window(game: &mut Game<'_>, offset: usize, len: usize) {
+    let known = game.native_known_recipes();
+    let updates = with_browser(|browser| {
+        browser.handle(model::Event::ShowWindow { offset, len }, false, &known)
+    })
+    .unwrap_or_default();
+    for update in updates {
+        publish(game, update);
+    }
+}

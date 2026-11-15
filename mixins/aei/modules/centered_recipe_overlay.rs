@@ -28,6 +28,9 @@ struct Navigation {
 thread_local! {
     static ITEM_SCROLL: RefCell<i32> = const { RefCell::new(0) };
     static BOOKMARK_PAGE: RefCell<usize> = const { RefCell::new(0) };
+    /// A window of a long category to show (offset, length), asked for where the game
+    /// can't be changed (page turns, the wheel) and shown on the next frame.
+    static PENDING_WINDOW: RefCell<Option<(usize, usize)>> = const { RefCell::new(None) };
     static NAVIGATION: RefCell<Option<Navigation>> = const { RefCell::new(None) };
     static STARTED: Instant = Instant::now();
     static CYCLE: RefCell<Option<(Instant, f64)>> = const { RefCell::new(None) };
@@ -483,14 +486,17 @@ fn draw_recipes(
     paint::title(
         game,
         batch,
-        &format!("{}/{}", view.page + 1, view.pages),
+        &{
+            let (page, pages) = global_page(view);
+            format!("{}/{}", page + 1, pages)
+        },
         view.page_label,
     );
     let names = [
         ["Previous category", "Next category"],
         ["Previous recipe page", "Next recipe page"],
     ];
-    let enabled = [page.tabs.len() > 1, view.pages > 1];
+    let enabled = [page.tabs.len() > 1, global_page(view).1 > 1];
     for (row, arrows) in [view.category_arrows, view.page_arrows].iter().enumerate() {
         for (i, rect) in arrows.iter().enumerate() {
             paint::arrow_button(game, batch, *rect, i == 1, enabled[row], names[row][i]);
@@ -720,6 +726,9 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
     if owned(game).is_none() {
         return ControlFlow::Continue(());
     }
+    if let Some((offset, len)) = PENDING_WINDOW.with(|cell| cell.borrow_mut().take()) {
+        crate::game::aei_glue::show_window(game, offset, len);
+    }
     let recipes = game.panel.recipes.is_some();
     let Some(screen) = screen(game, batch, recipes) else {
         return ControlFlow::Continue(());
@@ -730,6 +739,17 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         .map(|view| transfers(game, view))
         .unwrap_or_default();
     if let Some(view) = &screen.view {
+        // A long category's first window ends on a page boundary, so pages read on
+        // across windows.
+        let (offset, total) = crate::game::aei_glue::recipe_window();
+        let shown = game
+            .panel_shown()
+            .and_then(|shown| shown.recipes.as_ref())
+            .map_or(0, |page| page.recipes.len());
+        let len = window_len(view.per_page);
+        if total > shown && shown != len && offset + shown < total {
+            PENDING_WINDOW.with(|cell| *cell.borrow_mut() = Some((offset, len)));
+        }
         // The vanilla in-game screen background behind the recipe window.
         batch.fill_gradient(
             &game.gui.atlas,
@@ -860,16 +880,70 @@ fn shapeless_hovered(game: &Game<'_>, view: &Viewer) -> Option<String> {
         .then(|| "Shapeless Recipe".to_owned())
 }
 
-fn turn_page(view: &Viewer, forward: bool) {
+/// The panel holds at most this many recipes of a category at a time.
+const WINDOW_LIMIT: usize = 256;
+
+/// The longest window that ends on a page boundary for `per_page` recipes a page.
+fn window_len(per_page: usize) -> usize {
+    let per_page = per_page.max(1);
+    (WINDOW_LIMIT / per_page).max(1) * per_page
+}
+
+/// The page shown out of all the category's pages: (page, pages), across windows.
+fn global_page(view: &Viewer) -> (usize, usize) {
+    let (offset, total) = crate::game::aei_glue::recipe_window();
+    let per_page = view.per_page.max(1);
+    let pages = total.div_ceil(per_page).max(view.pages);
+    (offset / per_page + view.page, pages)
+}
+
+fn set_local_page(page: usize) {
     NAVIGATION.with(|cell| {
         if let Some(state) = cell.borrow_mut().as_mut() {
-            state.page = if forward {
-                (view.page + 1) % view.pages
-            } else {
-                (view.page + view.pages - 1) % view.pages
-            };
+            state.page = page;
         }
     });
+}
+
+/// The next or previous page, moving to another window of a long category at the
+/// window's ends and wrapping around at the category's ends.
+fn turn_page(view: &Viewer, forward: bool) {
+    let (offset, total) = crate::game::aei_glue::recipe_window();
+    let len = window_len(view.per_page);
+    let shown = view.pages * view.per_page;
+    let windowed = total > shown || offset > 0;
+    let mut window = None;
+    let page = if forward {
+        if view.page + 1 < view.pages {
+            view.page + 1
+        } else if windowed {
+            let next = if offset + shown < total {
+                offset + len
+            } else {
+                0
+            };
+            window = Some(next);
+            0
+        } else {
+            0
+        }
+    } else if view.page > 0 {
+        view.page - 1
+    } else if windowed {
+        let previous = if offset > 0 {
+            offset.saturating_sub(len)
+        } else {
+            (total.saturating_sub(1) / len) * len
+        };
+        window = Some(previous);
+        (total - previous).min(len).div_ceil(view.per_page.max(1)) - 1
+    } else {
+        view.pages - 1
+    };
+    if let Some(offset) = window {
+        PENDING_WINDOW.with(|cell| *cell.borrow_mut() = Some((offset, len)));
+    }
+    set_local_page(page);
 }
 
 /// A press on the item list; true when it hit something there.
@@ -982,7 +1056,7 @@ fn press_recipes(game: &mut Game<'_>, owner: &Owner, view: &Viewer, right: bool)
         .iter()
         .position(|rect| viewer::contains(*rect, game.cursor))
     {
-        if view.pages > 1 {
+        if global_page(view).1 > 1 {
             turn_page(view, i == 1);
         }
     } else if let Some((index, _)) = view.cards.iter().find(|(i, card)| {
@@ -1152,7 +1226,7 @@ fn scroll(game: &Game<'_>, amount: f64) -> bool {
     let Some(view) = &screen.view else {
         return false;
     };
-    if amount != 0.0 && view.pages > 1 {
+    if amount != 0.0 && global_page(view).1 > 1 {
         turn_page(view, amount < 0.0);
     }
     true

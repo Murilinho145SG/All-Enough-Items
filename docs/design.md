@@ -118,7 +118,10 @@ worked around:
   categories are built by `glue::fuels_and_compostables` from the items' data
   components (burn time through Horizon's providers, chance from the named
   compostable providers or a weighted list).
-- A query or category shows at most 256 recipes (the native page limit).
+- The native panel holds at most 256 recipes. The engine keeps a category's full
+  list and sends a window of it (`Event::ShowWindow`), sized by the overlay to a
+  whole number of pages; page turns past a window's end ask for the next one, and
+  the page label counts across windows.
 - Third-party panels in the creative inventory are not supported.
 - At the pinned Horizon revision, placing a furnace-family recipe in singleplayer
   (through the vanilla book or AEI's "+") takes the input from the inventory but
