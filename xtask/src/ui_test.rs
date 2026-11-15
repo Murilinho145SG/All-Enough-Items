@@ -42,12 +42,10 @@ pub fn run(socket: &Path, out: &Path) -> Result {
         }
         game.send("key esc tap")?;
     }
+    // Right-clicking the field clears any search left from an earlier run.
     let field = game.field()?;
-    game.send(&format!("click {field}"))?;
-    game.select_all()?;
-    for _ in 0..50 {
-        game.send(r"type \b")?;
-    }
+    game.send(&format!("click {field} right"))?;
+    game.send("click-at 1 1")?;
 
     // The first catalogue entry is Stone; right-click shows its uses.
     game.click("Item 0", true)?;

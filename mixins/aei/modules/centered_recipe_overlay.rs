@@ -216,16 +216,53 @@ fn hovered_recipe(game: &Game<'_>, view: &Viewer) -> Option<(usize, usize, Brows
     None
 }
 
+/// The shown category's catalysts (JEI's column left of the window) and their wells.
+fn catalysts(game: &Game<'_>, view: &Viewer) -> Vec<(BrowserStack, viewer::Rect)> {
+    let Some(page) = game.panel_shown().and_then(|shown| shown.recipes.as_ref()) else {
+        return Vec::new();
+    };
+    let Some(station) = page.tabs.get(page.tab as usize) else {
+        return Vec::new();
+    };
+    let mut ids: Vec<&str> = viewer::catalysts(&station.item).to_vec();
+    if ids.is_empty() {
+        ids.push(&station.item);
+    }
+    // Only blocks the game has: a catalyst from a later version is left out.
+    ids.retain(|id| world_items!(game).get(id).is_some());
+    let (_, wells) = view.catalyst_column(ids.len());
+    ids.into_iter()
+        .zip(wells)
+        .map(|(id, rect)| {
+            let stack = BrowserStack {
+                item: id.to_owned(),
+                count: 1,
+                components: String::new(),
+            };
+            (stack, rect)
+        })
+        .collect()
+}
+
+/// The catalyst under the pointer.
+fn hovered_catalyst(game: &Game<'_>, view: &Viewer) -> Option<BrowserStack> {
+    catalysts(game, view)
+        .into_iter()
+        .find(|(_, rect)| viewer::contains(*rect, game.cursor))
+        .map(|(stack, _)| stack)
+}
+
 /// The station or category icon under the pointer.
 fn hovered_station(game: &Game<'_>, view: &Viewer) -> Option<BrowserStack> {
     let page = game.panel_shown()?.recipes.as_ref()?;
-    let tab = view
+    match view
         .tabs
         .iter()
         .find(|(_, rect)| viewer::contains(*rect, game.cursor))
-        .map(|(i, _)| *i)
-        .or_else(|| viewer::contains(view.catalyst, game.cursor).then_some(page.tab as usize))?;
-    page.tabs.get(tab).cloned()
+    {
+        Some((tab, _)) => page.tabs.get(*tab).cloned(),
+        None => hovered_catalyst(game, view),
+    }
 }
 
 /// Draws `sent` centred in `rect`, with the slot highlight when `highlight` and hovered.
@@ -466,9 +503,23 @@ fn draw_recipes(
         }
     }
 
-    if let Some(station) = station {
-        paint::station_tab(game, batch, view.catalyst_tab, view.catalyst);
-        draw_stack(game, batch, station, view.catalyst, "Recipe catalyst", true);
+    if station.is_some() {
+        let catalysts = catalysts(game, view);
+        let (tab, wells) = view.catalyst_column(catalysts.len());
+        paint::station_tab(game, batch, tab, view.catalyst);
+        for rect in wells.iter().skip(1) {
+            paint::slot(game, batch, *rect);
+        }
+        for (i, (stack, rect)) in catalysts.iter().enumerate() {
+            draw_stack(
+                game,
+                batch,
+                stack,
+                *rect,
+                &format!("Recipe catalyst {i}"),
+                true,
+            );
+        }
     }
     for (i, rect) in &view.tabs {
         paint::tab(game, batch, *rect, *i == page.tab as usize);
@@ -864,6 +915,9 @@ fn press_recipes(game: &mut Game<'_>, owner: &Owner, view: &Viewer, right: bool)
             };
             game.panel_event(owner, BrowserEvent::Tab(tab as u32));
         }
+    } else if let Some(stack) = hovered_catalyst(game, view) {
+        // JEI: a catalyst's recipes (left) or uses (right).
+        crate::game::aei_glue::lookup(game, &stack, right);
     } else if viewer::contains(view.category, game.cursor) {
         crate::game::aei_glue::show_category(game);
     } else if let Some(i) = view

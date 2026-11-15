@@ -26,6 +26,9 @@ through Horizon's native mod system.
   station on the left, category and page arrows, recipes on bordered plates with
   animated furnace and brewing progress, cook time and experience. The item list
   stays on the right, with page arrows above it and the search field below.
+- The category's catalysts (crafting table and crafter, both campfires, ...)
+  stand in a column left of the window; click one for its recipes, right-click
+  for its uses.
 - Click ingredients to follow recipes, click the category title to browse every
   recipe (one tab per category), and use **Left/Right** (or **Backspace** to go
   back) to navigate lookup history.

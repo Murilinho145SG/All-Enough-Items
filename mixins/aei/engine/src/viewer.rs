@@ -348,6 +348,23 @@ impl Default for ListOptions {
     }
 }
 
+/// The blocks that work a category whose station is `station`, in JEI's catalyst order.
+pub fn catalysts(station: &str) -> &'static [&'static str] {
+    match station {
+        "minecraft:crafting_table" => &["minecraft:crafting_table", "minecraft:crafter"],
+        "minecraft:furnace" => &["minecraft:furnace"],
+        "minecraft:blast_furnace" => &["minecraft:blast_furnace"],
+        "minecraft:smoker" => &["minecraft:smoker"],
+        "minecraft:campfire" | "minecraft:soul_campfire" => {
+            &["minecraft:campfire", "minecraft:soul_campfire"]
+        }
+        "minecraft:stonecutter" => &["minecraft:stonecutter"],
+        "minecraft:smithing_table" => &["minecraft:smithing_table"],
+        "minecraft:brewing_stand" => &["minecraft:brewing_stand"],
+        _ => &[],
+    }
+}
+
 /// The item list right of a screen: page bar, grid and the search row.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Sidebar {
@@ -441,6 +458,20 @@ impl Sidebar {
     }
 }
 
+impl Viewer {
+    /// The station tab grown to hold `count` catalysts, one well under another, and
+    /// their wells. One catalyst keeps the tab's own size.
+    pub fn catalyst_column(&self, count: usize) -> (Rect, Vec<Rect>) {
+        let [x, y, w, _] = self.catalyst_tab;
+        let count = count.max(1);
+        let tab = [x, y, w, 10.0 + SLOT * count as f32];
+        let wells = (0..count)
+            .map(|i| [x + 5.0, y + 5.0 + SLOT * i as f32, SLOT, SLOT])
+            .collect();
+        (tab, wells)
+    }
+}
+
 /// The bookmark list left of a screen, as JEI shows it: a page bar over a grid, aligned
 /// to the screen's left edge.
 #[derive(Clone, Debug, PartialEq)]
@@ -505,6 +536,19 @@ impl BookmarkList {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn catalysts_stack_in_a_growing_station_tab() {
+        let view = Viewer::new([480.0, 270.0], 1, 0, Category::Crafting, &[(3, 3, 9)], 0).unwrap();
+        let (tab, wells) = view.catalyst_column(1);
+        assert_eq!(tab, view.catalyst_tab);
+        assert_eq!(wells, [view.catalyst]);
+        let (tab, wells) = view.catalyst_column(2);
+        assert_eq!(wells.len(), 2);
+        assert!(wells[1][1] + wells[1][3] <= tab[1] + tab[3]);
+        assert_eq!(catalysts("minecraft:soul_campfire").len(), 2);
+        assert!(catalysts("test:none").is_empty());
+    }
 
     #[test]
     fn list_options_limit_columns_and_centre_the_search_bar() {

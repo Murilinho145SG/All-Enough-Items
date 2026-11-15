@@ -700,3 +700,13 @@ pub(super) fn back(game: &mut Game<'_>) -> bool {
     }
     true
 }
+
+/// A lookup started by AEI's own drawing (a catalyst): recipes, or uses when `uses`. In
+/// cheat mode it gives the stack, as other ingredient clicks do.
+pub(super) fn lookup(game: &mut Game<'_>, target: &NativeStack, uses: bool) {
+    let event = model::Event::ClickRecipeIngredient {
+        stack: stack(target),
+        right: uses,
+    };
+    bookmark_event(game, event);
+}
