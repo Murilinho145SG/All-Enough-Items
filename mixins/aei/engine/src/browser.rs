@@ -248,6 +248,27 @@ impl Browser {
             .then(|| self.render_page(known))
     }
 
+    /// The lookup trail (JEI-style breadcrumbs): each lookup's item (a category's station
+    /// for "all recipes"), whether it shows uses, and the shown lookup's index.
+    pub fn trail(&self) -> (Vec<(Stack, bool)>, Option<usize>) {
+        let (entries, current) = self.history.trail();
+        let trail = entries
+            .iter()
+            .map(|lookup| match lookup.category {
+                Some(station) => (
+                    Stack {
+                        id: station.icon().to_owned(),
+                        count: 1,
+                        components: String::new(),
+                    },
+                    false,
+                ),
+                None => (lookup.item.clone(), lookup.uses),
+            })
+            .collect();
+        (trail, current)
+    }
+
     /// The shown window of the category's recipes: its offset and the category's total.
     pub fn shown_window(&self) -> (usize, usize) {
         (self.window.0, self.window_total)
@@ -265,6 +286,7 @@ impl Browser {
                 | Event::ShowCategory
                 | Event::Back
                 | Event::Forward
+                | Event::JumpHistory(_)
         ) {
             self.window.0 = 0;
         }
@@ -390,6 +412,10 @@ impl Browser {
             }
             Event::Forward => {
                 self.history.forward();
+                vec![self.render_page(known)]
+            }
+            Event::JumpHistory(index) => {
+                self.history.jump(index);
                 vec![self.render_page(known)]
             }
         }
@@ -1084,6 +1110,39 @@ mod tests {
         let found = shown(&browser.handle(Event::Search("stick".into()), false, &[]));
         assert_eq!(found[0], "minecraft:stick");
         assert!(found.contains(&"minecraft:oak_log".to_owned()));
+    }
+
+    #[test]
+    fn the_trail_lists_lookups_and_jumps_back_to_one() {
+        let (items, recipes) = fixture();
+        let (mut browser, _) = Browser::new(items, recipes);
+        let lookup = |b: &mut Browser, id: &str, uses| {
+            b.handle(
+                Event::Lookup {
+                    stack: Stack {
+                        id: id.into(),
+                        count: 1,
+                        components: String::new(),
+                    },
+                    uses,
+                },
+                false,
+                &[],
+            )
+        };
+        lookup(&mut browser, "minecraft:oak_log", true);
+        lookup(&mut browser, "minecraft:oak_planks", true);
+        browser.handle(Event::ShowCategory, false, &[]);
+        let (trail, current) = browser.trail();
+        assert_eq!(trail.len(), 3);
+        assert_eq!(current, Some(2));
+        assert_eq!(trail[2].0.id, "minecraft:crafting_table");
+        let page = browser.handle(Event::JumpHistory(0), false, &[]);
+        assert!(matches!(&page[0], Update::RecipeList(p) if p.title == "Uses: Oak Log"));
+        assert_eq!(browser.trail().1, Some(0));
+        // Forward still reaches the later lookups.
+        let next = browser.handle(Event::Forward, false, &[]);
+        assert!(matches!(&next[0], Update::RecipeList(p) if p.title == "Uses: Oak Planks"));
     }
 
     #[test]

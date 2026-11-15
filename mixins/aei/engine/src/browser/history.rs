@@ -34,6 +34,18 @@ impl History {
         self.cursor = 0;
     }
 
+    /// Every lookup, oldest first, and the shown one's index (None on the catalogue).
+    pub(super) fn trail(&self) -> (&[Lookup], Option<usize>) {
+        (&self.entries, self.cursor.checked_sub(1))
+    }
+
+    /// Shows lookup `index` again, keeping the ones after it for Forward.
+    pub(super) fn jump(&mut self, index: usize) {
+        if index < self.entries.len() {
+            self.cursor = index + 1;
+        }
+    }
+
     pub(super) fn forward(&mut self) {
         self.cursor = (self.cursor + 1).min(self.entries.len());
     }

@@ -250,6 +250,30 @@ fn catalysts(game: &Game<'_>, view: &Viewer) -> Vec<(BrowserStack, viewer::Rect)
         .collect()
 }
 
+/// The breadcrumbs drawn: (trail index, stack, uses, rect), the last [`viewer::TRAIL`]
+/// lookups; none with fewer than two.
+fn breadcrumbs(
+    view: &Viewer,
+) -> (
+    Vec<(usize, BrowserStack, bool, viewer::Rect)>,
+    Option<usize>,
+) {
+    let (trail, current) = crate::game::aei_glue::trail();
+    if trail.len() < 2 {
+        return (Vec::new(), current);
+    }
+    let first = trail.len().saturating_sub(viewer::TRAIL);
+    let cells = view.trail(trail.len() - first);
+    let crumbs = trail
+        .into_iter()
+        .enumerate()
+        .skip(first)
+        .zip(cells)
+        .map(|((i, (stack, uses)), rect)| (i, stack, uses, rect))
+        .collect();
+    (crumbs, current)
+}
+
 /// The catalyst under the pointer.
 fn hovered_catalyst(game: &Game<'_>, view: &Viewer) -> Option<BrowserStack> {
     catalysts(game, view)
@@ -595,6 +619,20 @@ fn draw_recipes(
         }
         horizon_client::widgets::record(&format!("Recipe category {i}"), *rect, true);
     }
+    // The lookup trail above the tabs; the shown lookup is framed in gold.
+    let (crumbs, current) = breadcrumbs(view);
+    for (i, stack, _, rect) in &crumbs {
+        paint::slot(game, batch, *rect);
+        draw_stack(game, batch, stack, *rect, &format!("Breadcrumb {i}"), true);
+        if Some(*i) == current {
+            let [x, y, w, h] = *rect;
+            let gold = rgba(255, 200, 40, 255);
+            paint::fill(game, batch, [x, y, w, 1.0], gold);
+            paint::fill(game, batch, [x, y + h - 1.0, w, 1.0], gold);
+            paint::fill(game, batch, [x, y, 1.0, h], gold);
+            paint::fill(game, batch, [x + w - 1.0, y, 1.0, h], gold);
+        }
+    }
 }
 
 fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, items: &Sidebar, layout: &Layout) {
@@ -796,6 +834,15 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         .as_ref()
         .filter(|_| tab_title.is_none())
         .and_then(|view| {
+            let (crumbs, _) = breadcrumbs(view);
+            if let Some((_, stack, uses, _)) = crumbs
+                .into_iter()
+                .find(|(.., rect)| viewer::contains(*rect, cursor))
+            {
+                let what = if uses { "Uses" } else { "Recipes" };
+                slot_lines = vec![format!("\u{a7}7{what}")];
+                return Some(stack);
+            }
             hovered_recipe(game, view)
                 .map(|(card, slot, stack)| {
                     let output = game
@@ -1037,7 +1084,15 @@ fn press_recipes(game: &mut Game<'_>, owner: &Owner, view: &Viewer, right: bool)
         return;
     };
     let (tabs, tab) = (page.tabs.len(), page.tab as usize);
-    if let Some((index, _)) = view
+    let (crumbs, _) = breadcrumbs(view);
+    if let Some((i, ..)) = crumbs
+        .iter()
+        .find(|(.., rect)| viewer::contains(*rect, game.cursor))
+    {
+        crate::game::aei_glue::jump(game, *i);
+        game.audio
+            .play("minecraft:ui.button.click", None, 0.25, 1.0);
+    } else if let Some((index, _)) = view
         .tabs
         .iter()
         .find(|(_, rect)| viewer::contains(*rect, game.cursor))

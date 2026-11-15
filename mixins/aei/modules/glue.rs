@@ -980,3 +980,28 @@ fn save_search_history(game: &mut Game<'_>, change: impl FnOnce(&mut model::Brow
         game.native_set_setting(model::ID, SETTING_SEARCH_HISTORY, &text);
     }
 }
+
+/// The breadcrumb trail: each lookup's stack, whether it shows uses, and the shown one.
+pub(super) fn trail() -> (Vec<(NativeStack, bool)>, Option<usize>) {
+    with_browser(|browser| {
+        let (trail, current) = browser.trail();
+        let trail = trail
+            .iter()
+            .map(|(stack, uses)| (native(stack), *uses))
+            .collect();
+        (trail, current)
+    })
+    .unwrap_or_default()
+}
+
+/// A breadcrumb click: lookup `index` of the trail again.
+pub(super) fn jump(game: &mut Game<'_>, index: usize) {
+    let known = game.native_known_recipes();
+    let updates =
+        with_browser(|browser| browser.handle(model::Event::JumpHistory(index), false, &known))
+            .unwrap_or_default();
+    game.aei_reset_viewer();
+    for update in updates {
+        publish(game, update);
+    }
+}

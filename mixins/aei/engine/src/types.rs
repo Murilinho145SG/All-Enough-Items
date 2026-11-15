@@ -354,6 +354,8 @@ pub enum Event {
     Place(usize),
     Back,
     Forward,
+    /// Shows lookup `n` of the trail again (a breadcrumb click).
+    JumpHistory(usize),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

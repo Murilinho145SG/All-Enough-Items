@@ -511,7 +511,26 @@ impl Sidebar {
     }
 }
 
+/// Breadcrumbs shown at most.
+pub const TRAIL: usize = 10;
+
 impl Viewer {
+    /// The lookup trail's cells, `count` (at most [`TRAIL`]) in a row centred above the
+    /// category tabs; none when the screen has no room there.
+    pub fn trail(&self, count: usize) -> Vec<Rect> {
+        let count = count.min(TRAIL);
+        let tabs_top = self.area[1] - TAB + 3.0;
+        let y = tabs_top - SLOT - 1.0;
+        if count == 0 || y < 0.0 {
+            return Vec::new();
+        }
+        let width = count as f32 * SLOT;
+        let x = (self.area[0] + (self.area[2] - width) / 2.0).floor();
+        (0..count)
+            .map(|i| [x + i as f32 * SLOT, y, SLOT, SLOT])
+            .collect()
+    }
+
     /// The station tab grown to hold `count` catalysts, one well under another, and
     /// their wells. One catalyst keeps the tab's own size.
     pub fn catalyst_column(&self, count: usize) -> (Rect, Vec<Rect>) {
@@ -613,6 +632,21 @@ mod tests {
             Category::of(Layout::Smithing, "minecraft:smithing_table"),
             Category::Smithing
         );
+    }
+
+    #[test]
+    fn the_trail_sits_centred_above_the_tabs() {
+        let view = Viewer::new([480.0, 270.0], 1, 0, Category::Crafting, &[(3, 3, 9)], 0).unwrap();
+        let cells = view.trail(25);
+        assert_eq!(cells.len(), TRAIL);
+        let first = cells[0];
+        let last = cells[TRAIL - 1];
+        assert!(first[1] >= 0.0 && first[1] + first[3] <= view.tabs[0].1[1]);
+        assert_eq!(
+            first[0] - view.area[0],
+            view.area[0] + view.area[2] - (last[0] + last[2])
+        );
+        assert!(view.trail(0).is_empty());
     }
 
     #[test]
