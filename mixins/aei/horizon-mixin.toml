@@ -247,3 +247,16 @@ bindings = [
   { name = "value", ty = "Vec<(horizon_client::text::Text, u32)>", value = "$value" },
   { name = "stack", ty = "&ItemStack", value = "stack" },
 ]
+
+# R/U aimed at a block in the world open the inventory on its recipes or uses.
+[[injection]]
+id = "world_lookup"
+kind = "HEAD"
+target = "horizon_client::game::native_hooks::Game<'_>::native_key_event"
+helper = "hooks/world_lookup.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "key", ty = "KeyCode", value = "key" },
+  { name = "pressed", ty = "bool", value = "pressed" },
+  { name = "repeat", ty = "bool", value = "repeat" },
+]

@@ -29,7 +29,8 @@ through Horizon's native mod system.
 - An optional setting adds the item's mod name to every item tooltip, in blue
   italics as JEI does (off by default, since it changes vanilla tooltips).
 - Hover an item and press **R** for recipes or **U** for uses (also over
-  inventory slots and the vanilla recipe book's buttons). In the catalogue,
+  inventory slots and the vanilla recipe book's buttons). Beyond JEI, R and U
+  aimed at a block in the world open the inventory on that block's item. In the catalogue,
   left-click shows recipes and right-click shows uses.
 - Browse recipes in a JEI-style window: category tabs above it, the crafting
   station on the left, category and page arrows, recipes on bordered plates with

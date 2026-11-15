@@ -1195,3 +1195,58 @@ pub(super) fn shown_fresh(index: usize) -> bool {
     MARK_NEW.load(std::sync::atomic::Ordering::Relaxed)
         && with_browser(|browser| browser.shown_fresh(index)).unwrap_or(false)
 }
+
+/// R or U aimed at a block in the world (no screen open): opens the inventory on the
+/// recipes or uses of the block's item (beyond JEI).
+pub(super) fn world_key(game: &mut Game<'_>, key: &str) {
+    if !game.native_on(model::ID) || game.screen != super::Screen::Playing || game.title.is_some() {
+        return;
+    }
+    let recipes = game.native_mod_key(model::ID, model::KEY_RECIPE[0], model::KEY_RECIPE[2]);
+    let uses = game.native_mod_key(model::ID, model::KEY_USES[0], model::KEY_USES[2]);
+    let uses = match key {
+        k if k == recipes => false,
+        k if k == uses => true,
+        _ => return,
+    };
+    let Some(hit) = game.pick() else {
+        return;
+    };
+    let Some(item) = game.picked_stack(hit.pos, false) else {
+        return;
+    };
+    let target = model::Stack {
+        id: item.item.to_string(),
+        count: 1,
+        components: String::new(),
+    };
+    let known = game.native_known_recipes();
+    let updates = with_browser(|browser| {
+        browser.handle(
+            model::Event::Lookup {
+                stack: target,
+                uses,
+            },
+            false,
+            &known,
+        )
+    })
+    .unwrap_or_default();
+    if updates.is_empty() {
+        return;
+    }
+    // Open the inventory as its key does, then show the lookup.
+    if game.creative {
+        game.screen = super::Screen::Creative;
+        game.refresh_creative_tabs();
+        game.creative_screen.reopen();
+        game.refresh_saved_hotbars();
+    } else {
+        game.screen = super::Screen::Inventory;
+    }
+    game.capture(false);
+    game.aei_reset_viewer();
+    for update in updates {
+        publish(game, update);
+    }
+}
