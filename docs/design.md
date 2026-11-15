@@ -84,7 +84,9 @@ recipes. A new table rebuilds the browser; a change in recipe knowledge
 refreshes the placement (`+`) actions. Shutdown clearing happens in one place.
 
 Recipe placement always goes through the vanilla recipe book, so learned
-recipes and the server's rules stay authoritative.
+recipes and the server's rules stay authoritative. The open screen's own book
+decides: the crafting grid's for crafting recipes, and the furnace, blast
+furnace or smoker's for their cooking recipes (`recipe_status.rs`).
 
 ## Workspace layout
 
@@ -114,6 +116,10 @@ worked around:
 - Dynamic anvil, grindstone, fuel and compost categories are not exposed.
 - A query or category shows at most 256 recipes (the native page limit).
 - Third-party panels in the creative inventory are not supported.
+- At the pinned Horizon revision, placing a furnace-family recipe in singleplayer
+  (through the vanilla book or AEI's "+") takes the input from the inventory but
+  the furnace never shows it, and closing returns it. AEI uses the same book
+  call, so it follows whatever Horizon's book does.
 
 ## Verification
 

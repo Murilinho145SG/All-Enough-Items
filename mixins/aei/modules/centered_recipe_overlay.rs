@@ -394,8 +394,12 @@ fn transfers(game: &mut Game<'_>, view: &Viewer) -> Vec<Option<Transfer>> {
         .iter()
         .map(|(index, _)| {
             let recipe = &page.recipes[*index];
-            let crafting = recipe.layout == NativeRecipeLayout::Grid;
-            let id = ids.get(*index).copied().filter(|_| crafting).unwrap_or(-1);
+            // The recipe book places crafting and furnace-family recipes.
+            let book = matches!(
+                recipe.layout,
+                NativeRecipeLayout::Grid | NativeRecipeLayout::Cooking
+            );
+            let id = ids.get(*index).copied().filter(|_| book).unwrap_or(-1);
             (id, recipe.action == Some(true))
         })
         .collect();

@@ -51,8 +51,10 @@ through Horizon's native mod system.
 - Scroll or click arrows to turn pages. Right-click the search field to clear it.
 - Click **+** to move a recipe's ingredients into the crafting grid through the
   vanilla recipe book (**Shift-click** for as many sets as the inventory allows);
-  the recipe view then closes. The button only shows on crafting recipes that fit
-  the open grid (2x2 in the inventory, 3x3 at a crafting table). It is orange
+  the recipe view then closes. The button only shows on recipes the open screen's
+  book takes: crafting recipes that fit the open grid (2x2 in the inventory, 3x3
+  at a crafting table), and smelting, blasting or smoking recipes at their
+  furnace. It is orange
   when ingredients are missing (the grid shows the recipe as a ghost) and dark
   when the recipe isn't unlocked in the player's recipe book.
 

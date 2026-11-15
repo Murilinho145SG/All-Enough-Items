@@ -248,7 +248,7 @@ fn publish(game: &mut Game<'_>, update: model::Update) {
             }
         }
         model::Update::PlaceKnownRecipe(id) => {
-            match game.native_place_recipe(id, game.has_shift_down()) {
+            match game.aei_place_recipe(id, game.has_shift_down()) {
                 Err(message) => game.native_chat(&message),
                 // Placed: the recipe view closes so the grid shows, as JEI does.
                 Ok(()) => {
