@@ -806,6 +806,8 @@ struct PlanView {
     focus: usize,
     plan: crate::game::aei::Plan,
     panel: PlanPanel,
+    /// Assisted crafting (an option): the button and the step it would place.
+    next: Option<(viewer::Rect, Option<i32>)>,
 }
 
 impl PlanView {
@@ -819,11 +821,22 @@ impl PlanView {
             plan.leftovers.len(),
         ];
         let panel = PlanPanel::new(size, counts)?;
+        let next = crate::game::aei_glue::assist_enabled().then(|| {
+            let [x, y, w, h] = panel.area;
+            let rect = [
+                x + w - 6.0 - 60.0,
+                y + h - 6.0 - viewer::BUTTON,
+                60.0,
+                viewer::BUTTON,
+            ];
+            (rect, crate::game::aei_glue::next_step(&plan))
+        });
         Some(Self {
             targets,
             focus,
             plan,
             panel,
+            next,
         })
     }
 
@@ -928,6 +941,16 @@ fn draw_plan(game: &mut Game<'_>, batch: &mut HudBatch, view: &PlanView) {
         let [x, y, _, _] = *label;
         batch.text(&game.gui.atlas, title, x, y, paint::grey_text(), false);
     }
+    if let Some((rect, step)) = view.next {
+        paint::action_button(
+            game,
+            batch,
+            rect,
+            "Next step",
+            step.is_some(),
+            "Plan next step",
+        );
+    }
     let names = ["target", "material", "step", "leftover"];
     for (section, index, stack, rect) in view.cells() {
         paint::slot(game, batch, rect);
@@ -978,7 +1001,13 @@ fn draw_plan(game: &mut Game<'_>, batch: &mut HudBatch, view: &PlanView) {
 /// any other cell's recipes (left) or uses (right), which closes it.
 fn press_plan(game: &mut Game<'_>, view: &PlanView, right: bool) {
     let steps = [-64i64, -1, 1, 64];
-    if let Some(i) = view
+    if let Some((rect, Some(book))) = view.next
+        && viewer::contains(rect, game.cursor)
+    {
+        crate::game::aei_glue::place_step(game, book);
+        game.audio
+            .play("minecraft:ui.button.click", None, 0.25, 1.0);
+    } else if let Some(i) = view
         .panel
         .buttons
         .iter()

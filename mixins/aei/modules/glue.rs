@@ -17,6 +17,7 @@ static HIDDEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::ne
 static MOD_NAMES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CHEAT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static RECENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static ASSIST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CENTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static COLUMNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(9);
 
@@ -747,6 +748,7 @@ const SETTING_HIDDEN_ITEMS: &str = "hidden_items";
 const SETTING_CATEGORIES: &str = "categories";
 const SETTING_SEARCH_HISTORY: &str = "search_history";
 const SETTING_RECENT: &str = "recent";
+const SETTING_ASSIST: &str = "assisted_crafting";
 const SETTING_RECENT_ITEMS: &str = "recent_items";
 
 fn flag(game: &Game<'_>, key: &str) -> bool {
@@ -759,6 +761,7 @@ fn load_flags(game: &Game<'_>) {
     MOD_NAMES.store(flag(game, SETTING_MOD_NAMES), Relaxed);
     CHEAT.store(flag(game, SETTING_GIVE), Relaxed);
     RECENT.store(flag(game, SETTING_RECENT), Relaxed);
+    ASSIST.store(flag(game, SETTING_ASSIST), Relaxed);
     CENTERED.store(flag(game, SETTING_CENTERED), Relaxed);
     COLUMNS.store(columns(game), Relaxed);
 }
@@ -860,6 +863,7 @@ fn settings() -> Vec<Setting> {
         Setting::Columns,
         Setting::Flag(SETTING_CENTERED, "Search bar under the screen"),
         Setting::Flag(SETTING_RECENT, "Recently viewed items row"),
+        Setting::Flag(SETTING_ASSIST, "Calculator places the next step"),
         Setting::Flag(SETTING_MOD_NAMES, "Mod name in tooltips"),
         Setting::Flag(SETTING_CURSOR, "Cheat items in Creative go to the cursor"),
     ];
@@ -1108,4 +1112,27 @@ pub(super) fn plan(game: &Game<'_>, targets: &[(NativeStack, u32)]) -> Option<mo
         .map(|(target, count)| (stack(target), *count))
         .collect();
     with_browser(|browser| browser.plan_all(&targets, &inventory))
+}
+
+/// Whether assisted crafting is on (a setting, off by default).
+pub(super) fn assist_enabled() -> bool {
+    ASSIST.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Assisted crafting: the recipe-book id of the plan's next step the open grid can
+/// take from the inventory now.
+pub(super) fn next_step(plan: &model::Plan) -> Option<i32> {
+    // The session keeps the player's known recipes, refreshed every frame.
+    BROWSER.with(|cell| {
+        let session = cell.borrow();
+        let session = session.as_ref()?;
+        session.browser.next_book_step(plan, &session.known)
+    })
+}
+
+/// Places a step through the vanilla recipe book, one craft at a time.
+pub(super) fn place_step(game: &mut Game<'_>, book_id: i32) {
+    if let Err(message) = game.aei_place_recipe(book_id, false) {
+        game.native_chat(&message);
+    }
 }

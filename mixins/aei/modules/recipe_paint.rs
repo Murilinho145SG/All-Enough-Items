@@ -388,3 +388,27 @@ pub(super) fn text_button(
         true,
     );
 }
+
+/// A labelled button that can be disabled (the calculator's assisted crafting).
+pub(super) fn action_button(
+    game: &Game<'_>,
+    batch: &mut HudBatch,
+    rect: Rect,
+    label: &str,
+    enabled: bool,
+    name: &str,
+) {
+    button_face(game, batch, rect, enabled, name);
+    let [x, y, w, h] = rect;
+    let font = &game.gui.atlas.font;
+    let tx = (x + (w - font.width(label)) / 2.0).round();
+    let colour = if enabled { white() } else { grey_text() };
+    batch.text(
+        &game.gui.atlas,
+        label,
+        tx,
+        (y + (h - 8.0) / 2.0).round(),
+        colour,
+        enabled,
+    );
+}

@@ -26,6 +26,8 @@ pub struct PlanStep {
     pub stack: Stack,
     pub crafts: u32,
     pub station: String,
+    /// The recipe the plan makes it with (an index into the browser's recipes).
+    pub recipe: usize,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -62,7 +64,7 @@ struct Planner<'a> {
     /// Leftovers from earlier crafts, by registry index.
     spare: HashMap<usize, u32>,
     materials: Vec<(usize, u32, u32)>,
-    steps: Vec<(usize, u32, u32, RecipeKind)>,
+    steps: Vec<(usize, u32, u32, RecipeKind, usize)>,
     /// Items being made on the current path, to break cycles.
     path: Vec<usize>,
 }
@@ -164,7 +166,7 @@ impl Planner<'_> {
             self.need(input, amount * crafts);
         }
         self.path.pop();
-        self.steps.push((item, made, crafts, recipe.kind));
+        self.steps.push((item, made, crafts, recipe.kind, id));
     }
 
     fn add_material(&mut self, item: usize, need: u32, have: u32) {
@@ -228,7 +230,7 @@ impl Browser {
         }
         // Steps that make the target or anything else: merge repeats of one item.
         let mut steps: Vec<PlanStep> = Vec::new();
-        for (i, made, crafts, kind) in planner.steps {
+        for (i, made, crafts, kind, recipe) in planner.steps {
             let station = crate::Station::of(kind).icon().to_owned();
             match steps.iter_mut().find(|s| s.stack.id == self.items[i].id) {
                 Some(step) => {
@@ -239,6 +241,7 @@ impl Browser {
                     stack: stack(i, made),
                     crafts,
                     station,
+                    recipe,
                 }),
             }
         }

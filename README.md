@@ -52,7 +52,9 @@ through Horizon's native mod system.
   already holds first (short materials are red). Escape closes it; clicking an
   entry opens its recipes or uses. While it is open, **T** over another item
   adds it to a shopping list whose materials are summed; click a target to
-  change its count, right-click it to remove it.
+  change its count, right-click it to remove it. An option (off by default)
+  adds a **Next step** button that puts the first step the inventory can craft
+  now into the open grid through the vanilla recipe book, one craft per click.
 - An optional row at the bottom left holds the nine items looked up last (off by
   default; saved per instance).
 - Beyond JEI, the last ten lookups line up above the category tabs as a

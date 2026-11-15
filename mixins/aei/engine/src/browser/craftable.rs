@@ -31,10 +31,34 @@ impl Browser {
         }
     }
 
+    /// Assisted crafting: the recipe-book id of the plan's first step the inventory can
+    /// craft now in the open grid, when the player's book holds it.
+    pub fn next_book_step(&self, plan: &super::Plan, known: &[i32]) -> Option<i32> {
+        let mut stock: HashMap<usize, u32> = HashMap::new();
+        for held in &self.inventory {
+            if let Some(&i) = self.by_id.get(&held.id) {
+                *stock.entry(i).or_default() += held.count;
+            }
+        }
+        plan.steps.iter().find_map(|step| {
+            let book = self.recipes.get(step.recipe)?.book_id;
+            (book >= 0 && known.contains(&book) && self.recipe_craftable(step.recipe, &stock))
+                .then_some(book)
+        })
+    }
+
     /// Whether one crafting recipe for `item` fits the grid and the stock covers it.
     fn craftable(&self, item: usize, stock: &HashMap<usize, u32>) -> bool {
+        self.recipe_index
+            .produced_by(item)
+            .iter()
+            .any(|&id| self.recipe_craftable(id, stock))
+    }
+
+    /// Whether crafting recipe `id` fits the open grid and the stock covers it.
+    fn recipe_craftable(&self, id: usize, stock: &HashMap<usize, u32>) -> bool {
         let grid = self.grid.max(1);
-        self.recipe_index.produced_by(item).iter().any(|&id| {
+        {
             let recipe = &self.recipes[id];
             let fits = match recipe.kind {
                 RecipeKind::Shaped => recipe.width <= grid && recipe.height <= grid,
@@ -60,7 +84,7 @@ impl Browser {
                     }
                 })
             })
-        })
+        }
     }
 }
 
@@ -104,7 +128,9 @@ mod tests {
             book_id: -1,
         };
         // Sticks: 1x2 planks; a table: 3x3 of planks (to test the grid).
-        let (mut browser, _) = Browser::new(items, vec![shaped(1, 2, 2, 1), shaped(3, 3, 9, 2)]);
+        let mut table = shaped(3, 3, 9, 2);
+        table.book_id = 5;
+        let (mut browser, _) = Browser::new(items, vec![shaped(1, 2, 2, 1), table]);
         browser.handle(Event::Search("is:craftable".into()), false, &[]);
         let shown = |updates: Vec<Update>| match updates.first() {
             Some(Update::ItemList(list)) => list.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
@@ -125,5 +151,12 @@ mod tests {
         assert!(shown(browser.handle(inventory(1, 3), false, &[])).is_empty());
         // The same inventory again changes nothing.
         assert!(browser.handle(inventory(1, 3), false, &[]).is_empty());
+        // Assisted crafting: the first step the inventory can make, if the book has it.
+        browser.handle(inventory(9, 3), false, &[]);
+        let plan = browser.plan(&stack("table", 1), 1, &[stack("planks", 9)]);
+        assert_eq!(browser.next_book_step(&plan, &[]), None);
+        assert_eq!(browser.next_book_step(&plan, &[5]), Some(5));
+        browser.handle(inventory(9, 2), false, &[]);
+        assert_eq!(browser.next_book_step(&plan, &[5]), None);
     }
 }
