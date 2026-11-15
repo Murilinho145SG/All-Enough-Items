@@ -60,6 +60,10 @@ through Horizon's native mod system.
 - Beyond JEI, press **I** over an item for its details: id, mod, English name,
   stack size, durability, food, rarity, creative tabs, how many recipes make and
   use it, its components and its tags. Click a tag to list its items.
+- Two more options beyond JEI, off by default: spoiler-free mode lists only items
+  that have been in your inventory or that an unlocked recipe makes, and hides
+  recipes you haven't unlocked; newly found items get a gold dot until you look
+  them up (`is:new` lists them).
 - An optional row at the bottom left holds the nine items looked up last (off by
   default; saved per instance).
 - Beyond JEI, the last ten lookups line up above the category tabs as a

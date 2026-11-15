@@ -334,6 +334,10 @@ pub enum Event {
         grid: u32,
     },
     SetSearchModes(SearchModes),
+    /// The player's unlocked recipe-book ids (for spoiler-free mode).
+    SetKnown(Vec<i32>),
+    /// Spoiler-free mode: only found items and unlocked recipes show.
+    SetSpoilerFree(bool),
     SetSort(SortOrder),
     /// Edit mode shows hidden entries (marked) and makes clicks hide or show them.
     SetEditMode(bool),

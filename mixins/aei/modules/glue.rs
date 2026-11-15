@@ -18,6 +18,7 @@ static MOD_NAMES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool:
 static CHEAT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static RECENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static ASSIST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static MARK_NEW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CENTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static COLUMNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(9);
 
@@ -29,6 +30,11 @@ std::thread_local! {
 }
 
 const SETTING_BOOKMARKS: &str = "bookmarks";
+
+std::thread_local! {
+    /// The found items as last saved, so they are written only when they change.
+    static SAVED_SEEN: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
 
 /// The bookmark list: each stack, and whether it is a recipe bookmark.
 pub(super) fn bookmarks() -> Vec<(NativeStack, bool)> {
@@ -517,6 +523,16 @@ pub(super) fn frame(game: &mut Game<'_>) {
                 .native_setting(model::ID, SETTING_RECENT_ITEMS)
                 .unwrap_or_default();
             browser.load_recent(&recent);
+            let seen = game
+                .native_setting(model::ID, SETTING_SEEN)
+                .unwrap_or_default();
+            browser.load_seen(&seen);
+            browser.handle(model::Event::SetKnown(known.to_vec()), false, &[]);
+            browser.handle(
+                model::Event::SetSpoilerFree(flag(game, SETTING_SPOILER)),
+                false,
+                &[],
+            );
             // JEI's editable category order: written once with every category, then read.
             match game.native_setting(model::ID, SETTING_CATEGORIES) {
                 Some(text) => browser.load_categories(&text),
@@ -562,6 +578,11 @@ pub(super) fn frame(game: &mut Game<'_>) {
             session
                 .browser
                 .handle(model::Event::SetInventory { stacks, grid }, false, &known);
+        let seen = session.browser.seen_text();
+        if SAVED_SEEN.with(|saved| *saved.borrow() != seen) {
+            game.native_set_setting(model::ID, SETTING_SEEN, &seen);
+            SAVED_SEEN.with(|saved| *saved.borrow_mut() = seen);
+        }
         if let Some(model::Update::ItemList(items)) = changed.into_iter().next() {
             return Some((false, model::Update::ItemList(items)));
         }
@@ -576,6 +597,13 @@ pub(super) fn frame(game: &mut Game<'_>) {
         }
         if session.known != known {
             session.known = known;
+            let listed =
+                session
+                    .browser
+                    .handle(model::Event::SetKnown(session.known.to_vec()), false, &[]);
+            if let Some(update) = listed.into_iter().next() {
+                return Some((false, update));
+            }
             return session
                 .browser
                 .refresh(&session.known)
@@ -753,6 +781,9 @@ const SETTING_CATEGORIES: &str = "categories";
 const SETTING_SEARCH_HISTORY: &str = "search_history";
 const SETTING_RECENT: &str = "recent";
 const SETTING_ASSIST: &str = "assisted_crafting";
+const SETTING_SPOILER: &str = "spoiler_free";
+const SETTING_NEW: &str = "mark_new";
+const SETTING_SEEN: &str = "seen_items";
 const SETTING_RECENT_ITEMS: &str = "recent_items";
 
 fn flag(game: &Game<'_>, key: &str) -> bool {
@@ -766,6 +797,7 @@ fn load_flags(game: &Game<'_>) {
     CHEAT.store(flag(game, SETTING_GIVE), Relaxed);
     RECENT.store(flag(game, SETTING_RECENT), Relaxed);
     ASSIST.store(flag(game, SETTING_ASSIST), Relaxed);
+    MARK_NEW.store(flag(game, SETTING_NEW), Relaxed);
     CENTERED.store(flag(game, SETTING_CENTERED), Relaxed);
     COLUMNS.store(columns(game), Relaxed);
 }
@@ -868,6 +900,8 @@ fn settings() -> Vec<Setting> {
         Setting::Flag(SETTING_CENTERED, "Search bar under the screen"),
         Setting::Flag(SETTING_RECENT, "Recently viewed items row"),
         Setting::Flag(SETTING_ASSIST, "Calculator places the next step"),
+        Setting::Flag(SETTING_SPOILER, "Spoiler-free (only items you found)"),
+        Setting::Flag(SETTING_NEW, "Mark newly found items"),
         Setting::Flag(SETTING_MOD_NAMES, "Mod name in tooltips"),
         Setting::Flag(SETTING_CURSOR, "Cheat items in Creative go to the cursor"),
     ];
@@ -918,10 +952,11 @@ pub(super) fn settings_click(game: &mut Game<'_>, button: usize) {
             let on = !flag(game, key);
             game.native_set_setting(model::ID, key, if on { "true" } else { "false" });
             load_flags(game);
-            if key != SETTING_EDIT {
-                return;
+            match key {
+                SETTING_EDIT => model::Event::SetEditMode(on),
+                SETTING_SPOILER => model::Event::SetSpoilerFree(on),
+                _ => return,
             }
-            model::Event::SetEditMode(on)
         }
         Setting::Columns => {
             // 9, 8, ... 4, then 9 again.
@@ -1153,4 +1188,10 @@ pub(super) fn progress(station: &str) -> Option<(usize, usize)> {
         let session = session.as_ref()?;
         session.browser.progress(station, &session.known)
     })
+}
+
+/// Whether list entry `index` gets the "newly found" mark (an option).
+pub(super) fn shown_fresh(index: usize) -> bool {
+    MARK_NEW.load(std::sync::atomic::Ordering::Relaxed)
+        && with_browser(|browser| browser.shown_fresh(index)).unwrap_or(false)
 }

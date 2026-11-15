@@ -70,6 +70,8 @@ pub(super) struct Indexed {
     pub(super) item: Option<usize>,
     /// The inventory holds what one of its crafting recipes needs, in the open grid.
     pub(super) craftable: bool,
+    /// Found this session and not looked at yet.
+    pub(super) fresh: bool,
 }
 
 /// Lower case without accents, so `pá` finds `pa` and `Ç` finds `c`.
@@ -153,6 +155,7 @@ impl Indexed {
             has_recipe,
             item: None,
             craftable: false,
+            fresh: false,
         }
     }
 
@@ -194,6 +197,7 @@ impl Indexed {
                 "tool" | "damageable" => p.durability > 0,
                 "stackable" => p.max_stack > 1,
                 "craftable" => self.craftable,
+                "new" => self.fresh,
                 _ => false,
             },
             Filter::Recipe(wanted) => self.has_recipe == *wanted,
@@ -402,6 +406,9 @@ impl Browser {
         let mut exact = Vec::new();
         for &index in &self.order {
             if !self.edit_mode && self.is_hidden(index) {
+                continue;
+            }
+            if self.spoiler_free && !self.discovered(&self.catalogue[index].stack.id) {
                 continue;
             }
             match search.matches(&self.indexed[index], modes) {

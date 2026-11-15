@@ -161,6 +161,7 @@ impl Browser {
             .flatten()
             .copied()
             .filter(|&id| self.shows_category(self.recipes[id].kind))
+            .filter(|&id| self.recipe_unlocked(id))
             .filter(|&id| {
                 let recipe = &self.recipes[id];
                 if lookup.uses {

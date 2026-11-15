@@ -681,6 +681,16 @@ fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, items: &Sidebar, layout
         let (x, y) = layout.slot(offset);
         let rect = [x, y, viewer::SLOT, viewer::SLOT];
         draw_stack(game, batch, stack, rect, &format!("Item {index}"), true);
+        if crate::game::aei_glue::shown_fresh(index) {
+            // Newly found: a small gold dot in the corner.
+            let [x, y, w, _] = rect;
+            paint::fill(
+                game,
+                batch,
+                [x + w - 5.0, y + 2.0, 3.0, 3.0],
+                rgba(255, 200, 40, 255),
+            );
+        }
         if crate::game::aei_glue::shown_hidden(index) {
             // Edit mode: a hidden entry, shaded red as JEI marks it.
             paint::fill(game, batch, rect, rgba(255, 0, 0, 0x60));

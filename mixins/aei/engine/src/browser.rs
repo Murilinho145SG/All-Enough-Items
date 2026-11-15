@@ -14,6 +14,7 @@ mod bookmarks;
 mod categories;
 mod craftable;
 mod details;
+mod discovery;
 mod history;
 mod listing;
 mod plan;
@@ -45,6 +46,12 @@ pub struct Browser {
     /// What the player holds and the open crafting grid's size, for `is:craftable`.
     inventory: Vec<Stack>,
     grid: u32,
+    /// Items ever in the inventory, those found this session and not looked at, the
+    /// player's unlocked recipe-book ids and whether spoiler-free mode is on.
+    seen: std::collections::HashSet<String>,
+    fresh: std::collections::HashSet<String>,
+    known: Vec<i32>,
+    spoiler_free: bool,
     /// Earlier searches, oldest first, and the one Up/Down recalled last.
     search_history: Vec<String>,
     history_cursor: Option<usize>,
@@ -223,6 +230,7 @@ impl Browser {
             return None;
         }
         self.remember_recent(&candidate.item);
+        self.fresh.remove(&candidate.item.id);
         self.history.push(candidate);
         Some(self.render_page(known))
     }
@@ -346,6 +354,8 @@ impl Browser {
         }
         match event {
             Event::SetInventory { stacks, grid } => self.set_inventory(stacks, grid),
+            Event::SetKnown(known) => self.set_known(known),
+            Event::SetSpoilerFree(on) => self.set_spoiler_free(on),
             Event::ShowWindow { offset, len } => {
                 if self.history.current().is_none() {
                     return Vec::new();

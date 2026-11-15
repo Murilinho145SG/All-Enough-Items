@@ -24,7 +24,11 @@ impl Browser {
         for entry in &mut self.indexed {
             entry.craftable = entry.item.is_some_and(|i| craftable[i]);
         }
-        if self.search.reads_inventory() {
+        let found = self.discover();
+        for (entry, listed) in self.indexed.iter_mut().zip(&self.catalogue) {
+            entry.fresh = self.fresh.contains(&listed.stack.id);
+        }
+        if self.search.reads_inventory() || (found && self.spoiler_free) {
             vec![self.item_list()]
         } else {
             Vec::new()
