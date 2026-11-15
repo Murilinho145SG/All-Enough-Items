@@ -330,6 +330,24 @@ impl Viewer {
     }
 }
 
+/// JEI's item list options.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ListOptions {
+    /// At most this many columns (1 to 9).
+    pub max_columns: usize,
+    /// The search bar centred under the GUI instead of under the list.
+    pub centered_search: bool,
+}
+
+impl Default for ListOptions {
+    fn default() -> Self {
+        Self {
+            max_columns: MAX_ITEM_COLUMNS,
+            centered_search: false,
+        }
+    }
+}
+
 /// The item list right of a screen: page bar, grid and the search row.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Sidebar {
@@ -348,15 +366,39 @@ impl Sidebar {
     /// The list beside a GUI whose right edge is `gui_right`, sized for `items` entries.
     /// None when fewer than two columns or one row fit.
     pub fn new(screen: [f32; 2], gui_right: f32, items: usize) -> Option<Self> {
+        Self::with(
+            screen,
+            [gui_right, gui_right],
+            items,
+            ListOptions::default(),
+        )
+    }
+
+    /// [`Sidebar::new`] for a GUI spanning `gui` (left and right edges), with the list
+    /// options JEI's configuration offers.
+    pub fn with(
+        screen: [f32; 2],
+        gui: [f32; 2],
+        items: usize,
+        options: ListOptions,
+    ) -> Option<Self> {
         let [sw, sh] = screen;
-        let gui_right = gui_right.clamp(0.0, sw);
+        let gui_right = gui[1].clamp(0.0, sw);
+        let gui_left = gui[0].clamp(0.0, gui_right);
+        // A centred search bar sits under the GUI, so the grid takes the whole height.
+        let search_row = if options.centered_search {
+            0.0
+        } else {
+            BAR + 2.0
+        };
         let available = [
             gui_right + PADDING,
             PADDING + BAR + 2.0,
             sw - gui_right - 2.0 * PADDING,
-            sh - (BAR + 2.0) - 2.0 * PADDING - (BAR + 2.0),
+            sh - (BAR + 2.0) - 2.0 * PADDING - search_row,
         ];
-        let columns = ((available[2] / SLOT).floor().max(0.0) as usize).min(MAX_ITEM_COLUMNS);
+        let max_columns = options.max_columns.clamp(1, MAX_ITEM_COLUMNS);
+        let columns = ((available[2] / SLOT).floor().max(0.0) as usize).min(max_columns);
         let mut rows = ((available[3] / SLOT).floor().max(0.0) as usize).min(MAX_ITEM_ROWS);
         if columns < 2 || rows < 1 {
             return None;
@@ -369,14 +411,27 @@ impl Sidebar {
         let x = available[0] + available[2] - width;
         let y = available[1];
         let bottom = sh - PADDING - BAR;
+        let (search, settings) = if options.centered_search {
+            let width = (gui_right - gui_left).max(4.0 * BAR);
+            let left = ((gui_left + gui_right - width) / 2.0).floor().max(PADDING);
+            (
+                [left, bottom, width - BAR, BAR],
+                [left + width - BAR, bottom, BAR, BAR],
+            )
+        } else {
+            (
+                [x, bottom, width - BAR, BAR],
+                [x + width - BAR, bottom, BAR, BAR],
+            )
+        };
         Some(Self {
             area: [gui_right, 0.0, sw - gui_right, sh],
             grid: (x, y),
             columns,
             rows,
             nav: [x, y - BAR - 2.0, width, BAR],
-            search: [x, bottom, width - BAR, BAR],
-            settings: [x + width - BAR, bottom, BAR, BAR],
+            search,
+            settings,
         })
     }
 
@@ -450,6 +505,35 @@ impl BookmarkList {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn list_options_limit_columns_and_centre_the_search_bar() {
+        let screen = [640.0, 360.0];
+        let gui = [232.0, 408.0];
+        let narrow = ListOptions {
+            max_columns: 5,
+            centered_search: false,
+        };
+        let list = Sidebar::with(screen, gui, 1000, narrow).unwrap();
+        assert_eq!(list.columns, 5);
+        let default = Sidebar::with(screen, gui, 1000, ListOptions::default()).unwrap();
+        let centred = Sidebar::with(
+            screen,
+            gui,
+            1000,
+            ListOptions {
+                centered_search: true,
+                ..ListOptions::default()
+            },
+        )
+        .unwrap();
+        assert!(centred.rows >= default.rows);
+        let [x, _, w, _] = centred.search;
+        let [sx, _, sw, _] = centred.settings;
+        assert_eq!(x, 232.0);
+        assert_eq!(sx + sw, 408.0);
+        assert!(x + w <= sx);
+    }
 
     #[test]
     fn bookmarks_sit_left_of_the_gui_and_shrink_to_their_count() {

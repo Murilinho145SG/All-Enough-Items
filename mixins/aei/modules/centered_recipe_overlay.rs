@@ -134,7 +134,9 @@ fn screen(game: &Game<'_>, batch: &HudBatch, recipes: bool) -> Option<Screen> {
         None
     };
     let right = gui_right(game, batch, view.as_ref());
-    let items = Sidebar::new(size, right, game.panel.stacks.len()).map(|items| {
+    let left = gui_left(game, batch, view.as_ref());
+    let options = crate::game::aei_glue::list_options();
+    let items = Sidebar::with(size, [left, right], game.panel.stacks.len(), options).map(|items| {
         let layout = Layout {
             area: items.area,
             grid: items.grid,
@@ -146,11 +148,7 @@ fn screen(game: &Game<'_>, batch: &HudBatch, recipes: bool) -> Option<Screen> {
         };
         (items, layout)
     });
-    let bookmarks = BookmarkList::new(
-        size,
-        gui_left(game, batch, view.as_ref()),
-        crate::game::aei_glue::bookmark_count(),
-    );
+    let bookmarks = BookmarkList::new(size, left, crate::game::aei_glue::bookmark_count());
     // Without a recipe window, AEI only takes over when its list fits.
     (view.is_some() || items.is_some()).then_some(Screen {
         view,
@@ -917,7 +915,9 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
         search.focused = false;
     }
     if let Some((items, layout)) = &screen.items
-        && inside(game.cursor, items.area)
+        && (inside(game.cursor, items.area)
+            || inside(game.cursor, items.search)
+            || inside(game.cursor, items.settings))
     {
         // JEI deletes a stack dropped on the list; on the creative screen the cursor's
         // stack is the client's own, so it can simply go.
@@ -1095,20 +1095,20 @@ impl Game<'_> {
             return false;
         };
         let cursor = self.cursor;
-        screen
-            .items
-            .as_ref()
-            .is_some_and(|(items, _)| inside(cursor, items.area))
-            || screen.bookmarks.as_ref().is_some_and(|list| {
-                list.arrows()
-                    .iter()
-                    .chain(
-                        &(0..list.per_page())
-                            .map(|o| list.slot(o))
-                            .collect::<Vec<_>>(),
-                    )
-                    .any(|rect| viewer::contains(*rect, cursor))
-            })
+        screen.items.as_ref().is_some_and(|(items, _)| {
+            inside(cursor, items.area)
+                || inside(cursor, items.search)
+                || inside(cursor, items.settings)
+        }) || screen.bookmarks.as_ref().is_some_and(|list| {
+            list.arrows()
+                .iter()
+                .chain(
+                    &(0..list.per_page())
+                        .map(|o| list.slot(o))
+                        .collect::<Vec<_>>(),
+                )
+                .any(|rect| viewer::contains(*rect, cursor))
+        })
     }
 
     /// Cheat mode on the creative screen: `stack` on the cursor, as picking it from a

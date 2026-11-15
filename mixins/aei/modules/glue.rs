@@ -16,6 +16,8 @@ struct Session {
 static HIDDEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static MOD_NAMES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CHEAT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static CENTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static COLUMNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(9);
 
 std::thread_local! {
     static BROWSER: std::cell::RefCell<Option<Session>> = const { std::cell::RefCell::new(None) };
@@ -474,6 +476,8 @@ const SETTING_HIDDEN: &str = "hidden";
 const SETTING_MOD_NAMES: &str = "mod_names";
 const SETTING_CURSOR: &str = "give_cursor";
 const SETTING_EDIT: &str = "edit";
+const SETTING_CENTERED: &str = "centered_search";
+const SETTING_COLUMNS: &str = "columns";
 const SETTING_SORT: &str = "sort";
 const SETTING_HIDDEN_ITEMS: &str = "hidden_items";
 
@@ -486,6 +490,24 @@ fn load_flags(game: &Game<'_>) {
     HIDDEN.store(flag(game, SETTING_HIDDEN), Relaxed);
     MOD_NAMES.store(flag(game, SETTING_MOD_NAMES), Relaxed);
     CHEAT.store(flag(game, SETTING_GIVE), Relaxed);
+    CENTERED.store(flag(game, SETTING_CENTERED), Relaxed);
+    COLUMNS.store(columns(game), Relaxed);
+}
+
+fn columns(game: &Game<'_>) -> usize {
+    game.native_setting(model::ID, SETTING_COLUMNS)
+        .and_then(|value| value.parse().ok())
+        .filter(|n| (1..=9).contains(n))
+        .unwrap_or(9)
+}
+
+/// The item list options the settings page chose.
+pub(super) fn list_options() -> model::viewer::ListOptions {
+    use std::sync::atomic::Ordering::Relaxed;
+    model::viewer::ListOptions {
+        max_columns: COLUMNS.load(Relaxed),
+        centered_search: CENTERED.load(Relaxed),
+    }
 }
 
 /// Whether cheat mode is on (clicks give items).
@@ -555,6 +577,7 @@ enum Setting {
     /// An ON/OFF flag: its key and label.
     Flag(&'static str, &'static str),
     Sort,
+    Columns,
     /// The search mode of [`model::SearchModes::FIELDS`]'s field.
     Search(usize),
 }
@@ -565,6 +588,8 @@ fn settings() -> Vec<Setting> {
         Setting::Flag(SETTING_GIVE, "Cheat mode (clicks give items)"),
         Setting::Flag(SETTING_EDIT, "Edit mode (clicks hide items)"),
         Setting::Sort,
+        Setting::Columns,
+        Setting::Flag(SETTING_CENTERED, "Search bar under the screen"),
         Setting::Flag(SETTING_MOD_NAMES, "Mod name in tooltips"),
         Setting::Flag(SETTING_CURSOR, "Cheat items in Creative go to the cursor"),
     ];
@@ -592,6 +617,7 @@ pub(super) fn settings_labels(game: &Game<'_>) -> Vec<String> {
                 };
                 format!("Item list order: {order}")
             }
+            Setting::Columns => format!("Item list columns: at most {}", columns(game)),
             Setting::Search(field) => {
                 let (_, prefix, name) = model::SearchModes::FIELDS[field];
                 let mode = match modes.get(field) {
@@ -618,6 +644,17 @@ pub(super) fn settings_click(game: &mut Game<'_>, button: usize) {
                 return;
             }
             model::Event::SetEditMode(on)
+        }
+        Setting::Columns => {
+            // 9, 8, ... 4, then 9 again.
+            let next = if columns(game) <= 4 {
+                9
+            } else {
+                columns(game) - 1
+            };
+            game.native_set_setting(model::ID, SETTING_COLUMNS, &next.to_string());
+            load_flags(game);
+            return;
         }
         Setting::Sort => {
             let next = sort_order(game).next();
