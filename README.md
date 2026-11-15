@@ -72,15 +72,24 @@ preserved.
 The interface reproduces [JEI](https://www.curseforge.com/minecraft/mc-mods/jei)'s
 layout and controls (see `docs/design.md`). Its graphics are drawing primitives,
 vanilla GUI sprites and the JEI-style sprites Horizon already ships; no JEI
-implementation or assets are included. Full JEI feature parity is not claimed: the pinned native contract
-provides crafting, cooking, stonecutting, smithing and brewing; AEI adds JEI's
-fuel and compostable categories from the items' own `fuel` and `compostable`
-components, and the anvil category (repairs and enchanted books) from the
-anvil's own rules. AEI extends Horizon's creative
-inventory panel guard for its own recipe viewer and leaves the vanilla recipe
-book panel available. The viewer works from any inventory screen Horizon opens.
-The native panel holds 256 recipes at a time, so longer categories are sent a
-window at a time; the page numbers count the whole category.
+implementation or assets are included.
+
+JEI's vanilla features are covered: the item list with its search prefixes,
+modes, sorting, edit mode and options; bookmarks; cheat mode; the recipe window
+with catalysts, transfers, cycling ingredients and category order; and the
+crafting, cooking, campfire, stonecutting, smithing, brewing, anvil, fuel and
+compostable categories. The pinned native contract provides the first six; AEI
+adds fuel and compostable from the items' own `fuel` and `compostable`
+components, and the anvil from the anvil's own rules. What remains different is
+listed in `docs/roadmap-jei.md`: fluids (water and lava) aren't listed, since
+the GUI atlas has no fluid sprites and no vanilla recipe uses them, and furnace
+transfers follow a Horizon issue at the pinned revision (see `docs/design.md`).
+
+AEI extends Horizon's creative inventory panel guard for its own recipe viewer
+and leaves the vanilla recipe book panel available. The viewer works from any
+inventory screen Horizon opens. The native panel holds 256 recipes at a time, so
+longer categories are sent a window at a time; the page numbers count the whole
+category.
 
 ## Install
 
