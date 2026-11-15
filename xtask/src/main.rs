@@ -2,6 +2,7 @@
 
 mod bundle;
 mod check;
+mod install;
 mod package;
 mod ui_test;
 
@@ -16,7 +17,10 @@ usage: cargo xtask <command>
 commands:
   check                      validate pins and bundle contents, then fmt, clippy and tests
   package [--out DIR]        write a reproducible dist/aei-<version>.hnmod and its .sha256
-  ui-test SOCKET --out DIR   drive a running disposable game through the recipe viewer";
+  ui-test SOCKET --out DIR   drive a running disposable game through the recipe viewer
+  install [--home DIR] [--instance NAME] [--launcher PATH]
+                             package the tree into an instance and native-build it
+                             (defaults: ~/.local/share/horizon, horizon, horizon-launcher)";
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -33,6 +37,7 @@ fn main() -> ExitCode {
             }
             _ => Err(USAGE.into()),
         },
+        Some("install") => install_args(&args[1..]),
         Some("help" | "--help" | "-h") => {
             println!("{USAGE}");
             Ok(())
@@ -46,4 +51,21 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn install_args(args: &[String]) -> Result {
+    let mut home = std::env::var_os("HOME")
+        .map(|h| PathBuf::from(h).join(".local/share/horizon"))
+        .ok_or("HOME is not set")?;
+    let mut instance = "horizon".to_owned();
+    let mut launcher = "horizon-launcher".to_owned();
+    for pair in args.chunks(2) {
+        match pair {
+            [key, value] if key == "--home" => home = PathBuf::from(value),
+            [key, value] if key == "--instance" => instance = value.clone(),
+            [key, value] if key == "--launcher" => launcher = value.clone(),
+            _ => return Err(USAGE.into()),
+        }
+    }
+    install::run(&home, &instance, &launcher)
 }

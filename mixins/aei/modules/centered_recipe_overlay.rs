@@ -222,7 +222,10 @@ fn draw_stack(
     if highlight && viewer::contains(rect, game.cursor) {
         paint::highlight(game, batch, item);
     }
-    horizon_client::widgets::record(name, rect, true);
+    // "Item 3: minecraft:stone x1": the control socket's id stops at the
+    // first ':' (`item-3`), so automation keeps stable ids and reads the stack.
+    let label = format!("{name}: {} x{}", sent.item, sent.count);
+    horizon_client::widgets::record(&label, rect, true);
 }
 
 /// The category's title as JEI names it.

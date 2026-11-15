@@ -75,6 +75,15 @@ than a RAM-backed `/tmp`: the staged client's link step needs several
 gigabytes. Keep game runs and packaged artifacts outside the source tree, with
 fresh game directories and scratch homes as Horizon requires.
 
+`cargo xtask install [--instance NAME] [--launcher PATH]` packages the working
+tree into the instance's `horizon-native-mods/` (replacing other AEI bundles) and
+runs `horizon-launcher native-build --trust-native-code` on it, so the next game
+start plays the local source.
+
+Recipe-window and item-list widgets label their stacks for automation as
+`Item 3: minecraft:stone x1`; the control socket's widget id (`item-3`) stops at
+the colon, so scripts keep stable ids and can still read what is shown.
+
 For a disposable game already running with a control socket,
 `cargo xtask ui-test /tmp/test-game/ctl.sock --out /tmp/aei-ui` exercises real
 clicks, scrolling, categories, history and search and saves screenshots outside

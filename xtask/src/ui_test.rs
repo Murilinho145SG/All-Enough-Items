@@ -169,6 +169,8 @@ impl Game {
     }
 
     fn widgets(&mut self) -> Result<Vec<Value>> {
+        // `ui` reflects the last drawn frame: let a key, click or scroll reach one first.
+        self.send("wait 2")?;
         match self.send("ui")?["widgets"].take() {
             Value::Array(widgets) => Ok(widgets),
             other => Err(format!("ui: no widget list in {other}")),
@@ -211,7 +213,12 @@ impl Game {
         let id = self
             .widgets()?
             .iter()
-            .find(|w| w["label"] == label)
+            // Stack widgets append ": <item> x<count>" to their name.
+            .find(|w| {
+                w["label"]
+                    .as_str()
+                    .is_some_and(|l| l.split(": ").next() == Some(label))
+            })
             .and_then(|w| w["id"].as_str().map(str::to_owned))
             .ok_or_else(|| format!("no widget labelled {label:?}"))?;
         let suffix = if right { " right" } else { "" };
