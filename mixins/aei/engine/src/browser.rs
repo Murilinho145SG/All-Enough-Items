@@ -2,6 +2,7 @@ use crate::{
     Entry, Event, Ingredient, ItemInfo, Layout, Lookup, RECIPE_LIMIT, Recipe, RecipeCard,
     RecipeKind, RecipePage, STACK_LIMIT, SearchModes, Stack, Station, Update,
 };
+pub use details::Details;
 pub use plan::{Plan, PlanMaterial, PlanStep};
 use search::{Indexed, SearchQuery};
 use std::collections::HashMap;
@@ -12,6 +13,7 @@ pub const RECENT: usize = 9;
 mod bookmarks;
 mod categories;
 mod craftable;
+mod details;
 mod history;
 mod listing;
 mod plan;

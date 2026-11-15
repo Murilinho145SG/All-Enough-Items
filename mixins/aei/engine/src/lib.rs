@@ -7,7 +7,7 @@ mod browser;
 mod types;
 pub mod viewer;
 
-pub use browser::{Browser, Plan, PlanMaterial, PlanStep, RECENT};
+pub use browser::{Browser, Details, Plan, PlanMaterial, PlanStep, RECENT};
 pub use types::{
     Bookmark, Entry, EntryProps, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard,
     RecipeKind, RecipePage, SearchMode, SearchModes, SortOrder, Stack, Update,

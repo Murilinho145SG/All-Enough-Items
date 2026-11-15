@@ -1,5 +1,7 @@
 fn aei_listed(mods: &mut Vec<crate::game::native_hooks::NativeMod>) {
-    use crate::game::aei::{KEY_BACK, KEY_BOOKMARK, KEY_FORWARD, KEY_PLAN, KEY_RECIPE, KEY_USES};
+    use crate::game::aei::{
+        KEY_BACK, KEY_BOOKMARK, KEY_FORWARD, KEY_INFO, KEY_PLAN, KEY_RECIPE, KEY_USES,
+    };
     let mut title = String::from(crate::game::aei::NAME);
     title.push(' ');
     title.push_str(crate::game::aei::VERSION);
@@ -10,6 +12,7 @@ fn aei_listed(mods: &mut Vec<crate::game::native_hooks::NativeMod>) {
         KEY_FORWARD,
         KEY_BOOKMARK,
         KEY_PLAN,
+        KEY_INFO,
     ]
     .iter()
     .map(|key| [key[0].into(), key[1].into(), key[2].into()])

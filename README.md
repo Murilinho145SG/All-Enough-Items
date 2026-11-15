@@ -55,6 +55,9 @@ through Horizon's native mod system.
   change its count, right-click it to remove it. An option (off by default)
   adds a **Next step** button that puts the first step the inventory can craft
   now into the open grid through the vanilla recipe book, one craft per click.
+- Beyond JEI, press **I** over an item for its details: id, mod, English name,
+  stack size, durability, food, rarity, creative tabs, how many recipes make and
+  use it, its components and its tags. Click a tag to list its items.
 - An optional row at the bottom left holds the nine items looked up last (off by
   default; saved per instance).
 - Beyond JEI, the last ten lookups line up above the category tabs as a

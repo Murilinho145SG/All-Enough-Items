@@ -637,6 +637,10 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
                 game.aei_open_plan(target.clone());
                 return;
             }
+            if *key == game.native_mod_key(model::ID, model::KEY_INFO[0], model::KEY_INFO[2]) {
+                game.aei_open_details(target.clone());
+                return;
+            }
             if is_bookmark {
                 model::Event::ToggleBookmark(stack(target))
             } else if is_back {
@@ -1135,4 +1139,9 @@ pub(super) fn place_step(game: &mut Game<'_>, book_id: i32) {
     if let Err(message) = game.aei_place_recipe(book_id, false) {
         game.native_chat(&message);
     }
+}
+
+/// The details of `target` for the I key's panel.
+pub(super) fn details(target: &NativeStack) -> Option<model::Details> {
+    with_browser(|browser| browser.details(&stack(target))).flatten()
 }

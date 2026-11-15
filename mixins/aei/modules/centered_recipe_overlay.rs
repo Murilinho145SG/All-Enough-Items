@@ -31,6 +31,8 @@ thread_local! {
     /// The material calculator while it is open: its targets (a shopping list) with
     /// their counts, and the one the count buttons change.
     static PLAN: RefCell<Option<(Vec<(BrowserStack, u32)>, usize)>> = const { RefCell::new(None) };
+    /// The item whose details panel is open (the I key).
+    static DETAILS: RefCell<Option<BrowserStack>> = const { RefCell::new(None) };
     /// The bookmark a left press went down on: its release clicks it, or moves it to
     /// the bookmark it is released over (JEI's drag to reorder).
     static BOOKMARK_DRAG: RefCell<Option<usize>> = const { RefCell::new(None) };
@@ -795,6 +797,115 @@ fn turn_bookmark_page(list: &BookmarkList, forward: bool) {
     });
 }
 
+/// The open details panel: the item, its details, the window and each tag's chip.
+struct DetailsView {
+    stack: BrowserStack,
+    details: crate::game::aei::Details,
+    area: viewer::Rect,
+    tags: Vec<(String, viewer::Rect)>,
+}
+
+impl DetailsView {
+    fn new(game: &Game<'_>, size: [f32; 2]) -> Option<Self> {
+        let stack = DETAILS.with(|cell| cell.borrow().clone())?;
+        let details = crate::game::aei_glue::details(&stack)?;
+        let area = PlanPanel::new(size, [0; 4])?.area;
+        let [x, y, w, h] = area;
+        // Tag chips flow under the lines, wrapping at the window's edge.
+        let font = &game.gui.atlas.font;
+        let left = x + 6.0;
+        let mut cx = left;
+        let mut cy = y + 34.0 + details.lines.len() as f32 * 11.0 + 14.0;
+        let mut tags = Vec::new();
+        for tag in &details.tags {
+            let width = font.width(&format!("${tag}")) + 6.0;
+            if cx + width > x + w - 6.0 && cx > left {
+                cx = left;
+                cy += 13.0;
+            }
+            if cy + 12.0 > y + h - 6.0 {
+                break;
+            }
+            tags.push((tag.clone(), [cx, cy, width, 12.0]));
+            cx += width + 3.0;
+        }
+        Some(Self {
+            stack,
+            details,
+            area,
+            tags,
+        })
+    }
+}
+
+fn draw_details(game: &mut Game<'_>, batch: &mut HudBatch, view: &DetailsView) {
+    let [x, y, w, _] = view.area;
+    paint::window(game, batch, view.area);
+    let icon = [x + 6.0, y + 6.0, viewer::SLOT, viewer::SLOT];
+    paint::slot(game, batch, icon);
+    draw_stack(game, batch, &view.stack, icon, "Details item", false);
+    let atlas = &game.gui.atlas;
+    // Dark text on the light panel, as vanilla container titles are.
+    let label_colour = rgba(96, 96, 96, 255);
+    let text_colour = rgba(48, 48, 48, 255);
+    batch.text(
+        atlas,
+        &view.details.name,
+        x + 28.0,
+        y + 11.0,
+        text_colour,
+        false,
+    );
+    let font = &atlas.font;
+    let mut ly = y + 30.0;
+    for (label, value) in &view.details.lines {
+        let label = format!("{label}: ");
+        batch.text(atlas, &label, x + 6.0, ly, label_colour, false);
+        // Long values (components) are cut at the window's edge.
+        let room = w - 12.0 - font.width(&label);
+        let mut shown = value.clone();
+        while !shown.is_empty() && font.width(&shown) > room {
+            shown.pop();
+        }
+        if shown.len() < value.len() && shown.len() > 1 {
+            shown.pop();
+            shown.push('\u{2026}');
+        }
+        batch.text(
+            atlas,
+            &shown,
+            x + 6.0 + font.width(&label),
+            ly,
+            text_colour,
+            false,
+        );
+        ly += 11.0;
+    }
+    if !view.tags.is_empty() {
+        let text = "Tags (click to list their items):";
+        batch.text(atlas, text, x + 6.0, ly + 3.0, label_colour, false);
+    }
+    for (tag, rect) in &view.tags {
+        let hovered = viewer::contains(*rect, game.cursor);
+        let back = if hovered {
+            rgba(80, 80, 140, 255)
+        } else {
+            rgba(60, 60, 60, 255)
+        };
+        paint::fill(game, batch, *rect, back);
+        let [tx, ty, _, _] = *rect;
+        batch.text(
+            &game.gui.atlas,
+            &format!("${tag}"),
+            tx + 3.0,
+            ty + 2.0,
+            text_colour,
+            false,
+        );
+        horizon_client::widgets::record(&format!("Tag {tag}"), *rect, true);
+    }
+}
+
 /// The open calculator's targets and focused target.
 fn plan_state() -> Option<(Vec<(BrowserStack, u32)>, usize)> {
     PLAN.with(|cell| cell.borrow().clone())
@@ -1072,8 +1183,17 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         .as_ref()
         .map(|view| transfers(game, view))
         .unwrap_or_default();
-    let plan = PlanView::new(game, [batch.width, batch.height]);
-    if let Some(plan) = &plan {
+    let details = DetailsView::new(game, [batch.width, batch.height]);
+    let plan = PlanView::new(game, [batch.width, batch.height]).filter(|_| details.is_none());
+    if let Some(details) = &details {
+        batch.fill_gradient(
+            &game.gui.atlas,
+            (0.0, 0.0, batch.width, batch.height),
+            rgba(16, 16, 16, 0xC0),
+            rgba(16, 16, 16, 0xD0),
+        );
+        draw_details(game, batch, details);
+    } else if let Some(plan) = &plan {
         batch.fill_gradient(
             &game.gui.atlas,
             (0.0, 0.0, batch.width, batch.height),
@@ -1120,7 +1240,7 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
     let tab_title = screen
         .view
         .as_ref()
-        .filter(|_| plan.is_none())
+        .filter(|_| plan.is_none() && details.is_none())
         .and_then(|view| {
             let page = game.panel_shown()?.recipes.as_ref()?;
             let (i, _) = view
@@ -1146,7 +1266,7 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
             screen
                 .view
                 .as_ref()
-                .filter(|_| tab_title.is_none() && plan.is_none())
+                .filter(|_| tab_title.is_none() && plan.is_none() && details.is_none())
                 .and_then(|view| {
                     let (crumbs, _) = breadcrumbs(view);
                     if let Some((_, stack, uses, _)) = crumbs
@@ -1189,7 +1309,7 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
     let bookmark_tip = screen
         .view
         .as_ref()
-        .filter(|_| plan.is_none())
+        .filter(|_| plan.is_none() && details.is_none())
         .and_then(|view| {
             let (card, _) = view.cards.iter().find(|(i, card)| {
                 viewer::contains(card.bookmark, cursor)
@@ -1218,7 +1338,7 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
     } else if let Some((_, transfer)) = screen
         .view
         .as_ref()
-        .filter(|_| plan.is_none())
+        .filter(|_| plan.is_none() && details.is_none())
         .and_then(|view| hovered_transfer(game, view, &transfers))
     {
         let line = (transfer.tooltip().to_owned(), u32::MAX);
@@ -1494,6 +1614,22 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
     if let Some(search) = game.panel.search.as_mut() {
         search.focused = false;
     }
+    // The details panel is modal: a tag lists its items; elsewhere it closes.
+    if let Some(details) = DetailsView::new(game, [batch.width, batch.height]) {
+        if let Some((tag, _)) = details
+            .tags
+            .iter()
+            .find(|(_, rect)| viewer::contains(*rect, game.cursor))
+        {
+            DETAILS.with(|cell| *cell.borrow_mut() = None);
+            game.aei_set_search(&format!("${tag}"));
+            return ControlFlow::Break(true);
+        }
+        if viewer::contains(details.area, game.cursor) {
+            return ControlFlow::Break(true);
+        }
+        DETAILS.with(|cell| *cell.borrow_mut() = None);
+    }
     // The calculator is modal: its own clicks, and the lists beside it close it.
     if let Some(plan) = PlanView::new(game, [batch.width, batch.height]) {
         if viewer::contains(plan.panel.area, game.cursor) {
@@ -1694,7 +1830,10 @@ fn scroll(game: &Game<'_>, amount: f64) -> bool {
 }
 
 pub(super) fn back(game: &mut Game<'_>) -> ControlFlow<bool> {
-    // Escape closes the calculator first.
+    // Escape closes the details panel and the calculator first.
+    if owned(game).is_some() && DETAILS.with(|cell| cell.borrow_mut().take()).is_some() {
+        return ControlFlow::Break(true);
+    }
     if owned(game).is_some() && PLAN.with(|cell| cell.borrow_mut().take()).is_some() {
         return ControlFlow::Break(true);
     }
@@ -1708,6 +1847,11 @@ pub(super) fn back(game: &mut Game<'_>) -> ControlFlow<bool> {
 
 impl Game<'_> {
     /// Opens the material calculator for `stack` (the T key).
+    /// The I key: the details panel for `stack`.
+    pub(in crate::game) fn aei_open_details(&mut self, stack: BrowserStack) {
+        DETAILS.with(|cell| *cell.borrow_mut() = Some(BrowserStack { count: 1, ..stack }));
+    }
+
     /// The T key: opens the material calculator for `stack`, or, while it is open,
     /// adds `stack` to its shopping list (or focuses it if it is there).
     pub(in crate::game) fn aei_open_plan(&mut self, stack: BrowserStack) {
