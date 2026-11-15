@@ -8,6 +8,16 @@ pub(super) struct RecipeIndex {
 }
 
 impl RecipeIndex {
+    /// The recipes that make registry item `item`.
+    pub(super) fn produced_by(&self, item: usize) -> &[usize] {
+        self.produces.get(&item).map_or(&[], Vec::as_slice)
+    }
+
+    /// How many recipes use registry item `item`.
+    pub(super) fn used_by(&self, item: usize) -> usize {
+        self.uses.get(&item).map_or(0, Vec::len)
+    }
+
     /// Whether any recipe makes registry item `item`.
     pub(super) fn makes(&self, item: usize) -> bool {
         self.produces.contains_key(&item)

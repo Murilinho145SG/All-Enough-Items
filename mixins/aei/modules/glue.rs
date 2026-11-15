@@ -605,6 +605,12 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
                 == game.native_mod_key(model::ID, model::KEY_FORWARD[0], model::KEY_FORWARD[2]);
             let is_bookmark = *key
                 == game.native_mod_key(model::ID, model::KEY_BOOKMARK[0], model::KEY_BOOKMARK[2]);
+            let is_plan =
+                *key == game.native_mod_key(model::ID, model::KEY_PLAN[0], model::KEY_PLAN[2]);
+            if is_plan {
+                game.aei_open_plan(target.clone());
+                return;
+            }
             if is_bookmark {
                 model::Event::ToggleBookmark(stack(target))
             } else if is_back {
@@ -1058,4 +1064,19 @@ fn save_recent(game: &mut Game<'_>) {
         game.native_set_setting(model::ID, SETTING_RECENT_ITEMS, &text);
         SAVED.with(|saved| *saved.borrow_mut() = text);
     }
+}
+
+/// The material plan for `count` of `target`, after the player's inventory.
+pub(super) fn plan(game: &Game<'_>, target: &NativeStack, count: u32) -> Option<model::Plan> {
+    let inventory: Vec<model::Stack> = game
+        .inventory
+        .iter()
+        .flatten()
+        .map(|held| model::Stack {
+            id: held.item.to_string(),
+            count: held.count,
+            components: String::new(),
+        })
+        .collect();
+    with_browser(|browser| browser.plan(&stack(target), count, &inventory))
 }

@@ -2,6 +2,7 @@ use crate::{
     Entry, Event, Ingredient, ItemInfo, Layout, Lookup, RECIPE_LIMIT, Recipe, RecipeCard,
     RecipeKind, RecipePage, STACK_LIMIT, SearchModes, Stack, Station, Update,
 };
+pub use plan::{Plan, PlanMaterial, PlanStep};
 use search::{Indexed, SearchQuery};
 use std::collections::HashMap;
 
@@ -12,6 +13,7 @@ mod bookmarks;
 mod categories;
 mod history;
 mod listing;
+mod plan;
 mod recipes;
 mod search;
 mod search_history;

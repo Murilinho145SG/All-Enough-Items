@@ -6,7 +6,7 @@ use crate::Result;
 use serde_json::{Value, json};
 use std::path::Path;
 
-const CHECKS: [&str; 12] = [
+const CHECKS: [&str; 13] = [
     "recipe pages",
     "scroll",
     "categories",
@@ -19,6 +19,7 @@ const CHECKS: [&str; 12] = [
     "prefixed search",
     "overlay toggle",
     "bookmarks",
+    "material calculator",
 ];
 
 #[cfg(not(unix))]
@@ -117,6 +118,12 @@ pub fn run(socket: &Path, out: &Path) -> Result {
     game.hover("Item 0")?;
     game.send("key a tap")?;
     ensure(game.bookmarks()? == before, "A again toggles it back")?;
+    // T opens the material calculator; Escape closes it.
+    game.hover("Item 4")?;
+    game.send("key t tap")?;
+    ensure(game.plan_shown()?, "T opens the material calculator")?;
+    game.send("key esc tap")?;
+    ensure(!game.plan_shown()?, "Escape closes the calculator")?;
     // Ctrl+O hides the overlay and shows it again.
     for shown in [false, true] {
         game.send("key ctrl down")?;
@@ -251,6 +258,14 @@ impl Game {
         let at = |i: usize| bounds.get(i).and_then(Value::as_f64).unwrap_or_default();
         let (x, y) = (at(0) + at(2) / 2.0, at(1) + at(3) / 2.0);
         self.send(&format!("scroll-at {x} {y} 0")).map(drop)
+    }
+
+    /// Whether the material calculator shows its raw materials.
+    fn plan_shown(&mut self) -> Result<bool> {
+        Ok(self
+            .labels()?
+            .iter()
+            .any(|label| label.starts_with("Plan material ")))
     }
 
     fn has_items(&mut self) -> Result<bool> {

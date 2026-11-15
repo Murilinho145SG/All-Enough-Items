@@ -43,6 +43,12 @@ through Horizon's native mod system.
 - Click ingredients to follow recipes, click the category title to browse every
   recipe (one tab per category), and use **Left/Right** (or **Backspace** to go
   back) to navigate lookup history.
+- Beyond JEI, press **T** over an item for the material calculator: the raw
+  materials a number of it takes (buttons or the wheel change the count), the
+  crafting steps in order and what is left over. It picks crafting, then cooking,
+  never unpacks storage blocks, avoids loops, and counts what the inventory
+  already holds first (short materials are red). Escape closes it; clicking an
+  entry opens its recipes or uses.
 - An optional row at the bottom left holds the nine items looked up last (off by
   default; saved per instance).
 - Beyond JEI, the last ten lookups line up above the category tabs as a

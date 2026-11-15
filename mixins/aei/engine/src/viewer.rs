@@ -544,6 +544,73 @@ impl Viewer {
     }
 }
 
+/// The material calculator's panel, in the recipe window's place: a title, the count
+/// buttons, then grids of raw materials, crafting steps and leftovers.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlanPanel {
+    pub area: Rect,
+    pub title: Rect,
+    /// -64, -1, +1, +64.
+    pub buttons: [Rect; 4],
+    /// Where the count is written, between the buttons.
+    pub count: Rect,
+    /// Each section's label and cells (cut to what fits).
+    pub sections: [(Rect, Vec<Rect>); 3],
+}
+
+impl PlanPanel {
+    /// The panel for `counts` cells per section (materials, steps, leftovers).
+    pub fn new(screen: [f32; 2], counts: [usize; 3]) -> Option<Self> {
+        let [sw, sh] = screen;
+        if sw < WIDTH || sh < MIN_HEIGHT {
+            return None;
+        }
+        let mut height = (sh - 58.0).clamp(MIN_HEIGHT, MAX_HEIGHT);
+        let top = TOP.min(sh - height).max(TAB);
+        height = height.min(sh - top - 2.0);
+        let left = ((sw - WIDTH) / 2.0).floor();
+        let inner = left + PADDING;
+        let width = WIDTH - 2.0 * PADDING;
+        let row = top + 19.0;
+        let button = |x: f32| [x, row, 24.0, BUTTON];
+        let buttons = [
+            button(inner),
+            button(inner + 26.0),
+            button(left + WIDTH - PADDING - 50.0),
+            button(left + WIDTH - PADDING - 24.0),
+        ];
+        let count = [inner + 52.0, row, width - 104.0, BUTTON];
+        let columns = (width / SLOT).floor() as usize;
+        let bottom = top + height - PADDING;
+        let mut y = row + BUTTON + 6.0;
+        let sections = counts.map(|n| {
+            let label = [inner, y, width, 10.0];
+            y += 11.0;
+            let room = ((bottom - y) / SLOT).floor().max(0.0) as usize * columns;
+            let shown = n.min(room);
+            let cells: Vec<Rect> = (0..shown)
+                .map(|i| {
+                    [
+                        inner + (i % columns) as f32 * SLOT,
+                        y + (i / columns) as f32 * SLOT,
+                        SLOT,
+                        SLOT,
+                    ]
+                })
+                .collect();
+            y += shown.div_ceil(columns).max(1) as f32 * SLOT + 3.0;
+            (label, cells)
+        });
+        Some(Self {
+            area: [left, top, WIDTH, height],
+            title: [inner, top + 4.0, width, BUTTON],
+            buttons,
+            count,
+            sections,
+        })
+    }
+}
+
 /// The recently looked-up items: one row along the bottom of the space left of the
 /// GUI (an option). None when fewer than three cells fit.
 pub fn recent_row(screen: [f32; 2], gui_left: f32, count: usize) -> Vec<Rect> {
@@ -677,6 +744,24 @@ mod tests {
         let list = BookmarkList::above([480.0, 270.0], 160.0, 1000, 20.0).unwrap();
         let last = list.slot(list.per_page() - 1);
         assert!(last[1] + last[3] <= row[0][1]);
+    }
+
+    #[test]
+    fn the_plan_panel_stacks_its_sections_inside_the_window() {
+        let panel = PlanPanel::new([480.0, 270.0], [12, 3, 2]).unwrap();
+        let [x, y, w, h] = panel.area;
+        for (label, cells) in &panel.sections {
+            assert!(label[1] >= y);
+            for cell in cells {
+                assert!(cell[0] >= x && cell[0] + cell[2] <= x + w);
+                assert!(cell[1] + cell[3] <= y + h);
+            }
+        }
+        assert_eq!(panel.sections[0].1.len(), 12);
+        // A long list is cut to what fits.
+        let full = PlanPanel::new([480.0, 270.0], [500, 500, 500]).unwrap();
+        assert!(full.sections[0].1.len() < 500);
+        assert!(panel.buttons[1][0] + 24.0 <= panel.count[0]);
     }
 
     #[test]

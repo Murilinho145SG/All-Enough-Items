@@ -366,3 +366,25 @@ pub(super) fn recipe_mark(game: &Game<'_>, batch: &mut HudBatch, [x, y, _, _]: R
     fill(game, batch, [x + 1.0, y + 3.0, 2.0, 1.0], gold);
     fill(game, batch, [x + 1.0, y + 4.0, 1.0, 1.0], gold);
 }
+
+/// A small button with a centred label (the calculator's count buttons).
+pub(super) fn text_button(
+    game: &Game<'_>,
+    batch: &mut HudBatch,
+    rect: Rect,
+    label: &str,
+    name: &str,
+) {
+    button_face(game, batch, rect, true, name);
+    let [x, y, w, h] = rect;
+    let font = &game.gui.atlas.font;
+    let tx = (x + (w - font.width(label)) / 2.0).round();
+    batch.text(
+        &game.gui.atlas,
+        label,
+        tx,
+        (y + (h - 8.0) / 2.0).round(),
+        white(),
+        true,
+    );
+}
