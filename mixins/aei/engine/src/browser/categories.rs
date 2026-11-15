@@ -64,6 +64,23 @@ impl Browser {
         self.categories.iter().copied()
     }
 
+    /// How many of a category's recipe-book recipes the player has unlocked, and how
+    /// many it has; `station` is the category's station id. None without book recipes.
+    pub fn progress(&self, station: &str, known: &[i32]) -> Option<(usize, usize)> {
+        let station = Station::ALL.into_iter().find(|s| s.icon() == station)?;
+        let book: Vec<i32> = self
+            .recipes
+            .iter()
+            .filter(|r| Station::of(r.kind) == station && r.book_id >= 0)
+            .map(|r| r.book_id)
+            .collect();
+        if book.is_empty() {
+            return None;
+        }
+        let unlocked = book.iter().filter(|id| known.contains(id)).count();
+        Some((unlocked, book.len()))
+    }
+
     pub(super) fn shows_category(&self, kind: RecipeKind) -> bool {
         self.categories.contains(&Station::of(kind))
     }

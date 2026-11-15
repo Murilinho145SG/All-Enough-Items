@@ -1145,3 +1145,12 @@ pub(super) fn place_step(game: &mut Game<'_>, book_id: i32) {
 pub(super) fn details(target: &NativeStack) -> Option<model::Details> {
     with_browser(|browser| browser.details(&stack(target))).flatten()
 }
+
+/// A category's unlocked and total recipe-book recipes, by its station id.
+pub(super) fn progress(station: &str) -> Option<(usize, usize)> {
+    BROWSER.with(|cell| {
+        let session = cell.borrow();
+        let session = session.as_ref()?;
+        session.browser.progress(station, &session.known)
+    })
+}

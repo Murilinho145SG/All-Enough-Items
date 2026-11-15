@@ -1219,6 +1219,18 @@ mod tests {
     }
 
     #[test]
+    fn progress_counts_unlocked_book_recipes_per_category() {
+        let (items, recipes) = fixture();
+        let (browser, _) = Browser::new(items, recipes);
+        assert_eq!(
+            browser.progress("minecraft:crafting_table", &[8]),
+            Some((1, 2))
+        );
+        assert_eq!(browser.progress("minecraft:stonecutter", &[8]), None);
+        assert_eq!(browser.progress("test:none", &[]), None);
+    }
+
+    #[test]
     fn lookup_tabs_and_back_keep_a_navigation_stack() {
         let (items, recipes) = fixture();
         let (mut browser, _) = Browser::new(items, recipes);

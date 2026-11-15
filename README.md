@@ -39,6 +39,8 @@ through Horizon's native mod system.
   folder (`horizon-mods/.horizon-mod-data/aei/`), which AEI writes with every
   category on first use, like JEI's category order configuration: move lines to
   reorder the tabs, or put `!` before one to hide that category.
+- A category tab's tooltip also says how many of its recipe-book recipes the
+  player has unlocked (beyond JEI).
 - The category's catalysts (crafting table and crafter, both campfires, ...)
   stand in a column left of the window; click one for its recipes, right-click
   for its uses.

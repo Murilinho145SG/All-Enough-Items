@@ -1247,7 +1247,15 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
                 .tabs
                 .iter()
                 .find(|(_, rect)| viewer::contains(*rect, cursor))?;
-            Some(category_title(game, &page.tabs.get(*i)?.item))
+            let station = &page.tabs.get(*i)?.item;
+            let title = category_title(game, station);
+            // Beyond JEI: how much of the category's recipe book the player unlocked.
+            Some(match crate::game::aei_glue::progress(station) {
+                Some((unlocked, total)) => {
+                    format!("{title}\n\u{a7}7Unlocked: {unlocked}/{total}")
+                }
+                None => title,
+            })
         });
     let mut slot_lines = Vec::new();
     let plan_hovered = plan.as_ref().and_then(|plan| {
@@ -1325,13 +1333,15 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         game.draw_carried(batch);
     } else if let Some(title) = tab_title {
         // JEI names the category and the mod that adds it.
-        let lines = [
-            (horizon_client::text::Text::legacy(&title), u32::MAX),
-            (
-                horizon_client::text::Text::legacy("\u{a7}9\u{a7}oMinecraft"),
-                u32::MAX,
-            ),
-        ];
+        let mut lines: Vec<_> = title
+            .lines()
+            .map(|line| (horizon_client::text::Text::legacy(line), u32::MAX))
+            .collect();
+        let mod_line = (
+            horizon_client::text::Text::legacy("\u{a7}9\u{a7}oMinecraft"),
+            u32::MAX,
+        );
+        lines.insert(1.min(lines.len()), mod_line);
         game.draw_tooltip_lines(batch, &lines, cursor.0, cursor.1);
     } else if let Some(tip) = bookmark_tip {
         game.draw_tooltip_lines(batch, &[(tip.to_owned(), u32::MAX)], cursor.0, cursor.1);
