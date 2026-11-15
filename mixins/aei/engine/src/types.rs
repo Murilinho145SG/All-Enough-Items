@@ -97,6 +97,25 @@ pub struct Entry {
     pub tooltip: Vec<String>,
     /// The titles of the creative tabs that list it, for `%` searches.
     pub tabs: Vec<String>,
+    /// Other names plain words find it by (its English name in another language).
+    pub aliases: Vec<String>,
+    /// What the `is:`, `stack:`, `dur`, `nutrition` and `rarity:` filters read.
+    pub props: EntryProps,
+}
+
+/// An entry's item properties for the search filters.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EntryProps {
+    pub max_stack: u32,
+    /// Its durability; 0 when it doesn't take damage.
+    pub durability: u32,
+    /// Its food points, when it can be eaten.
+    pub nutrition: Option<u32>,
+    /// `common`, `uncommon`, `rare` or `epic`.
+    pub rarity: String,
+    pub enchantable: bool,
+    /// It places a block.
+    pub block: bool,
 }
 
 /// The item list's order (JEI's ingredient sort stages, as one choice).

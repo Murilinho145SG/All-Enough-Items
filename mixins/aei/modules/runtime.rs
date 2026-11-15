@@ -9,7 +9,7 @@ pub const KEY_FORWARD: [&str; 3] = ["forward", "Next recipe lookup", "key.keyboa
 pub const KEY_BOOKMARK: [&str; 3] = ["bookmark", "Bookmark item", "key.keyboard.a"];
 
 pub use aei_engine::{
-    Browser, Entry, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard, RecipeKind,
-    SearchMode, SearchModes, SortOrder, Stack, Update,
+    Browser, Entry, EntryProps, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard,
+    RecipeKind, SearchMode, SearchModes, SortOrder, Stack, Update,
 };
 pub use aei_engine::{NOTE_SEPARATOR, SHAPELESS_NOTE, mod_name, viewer};

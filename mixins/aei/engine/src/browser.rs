@@ -107,15 +107,16 @@ impl Browser {
                         components: String::new(),
                     },
                     name: item.name.clone(),
-                    tooltip: Vec::new(),
-                    tabs: Vec::new(),
+                    ..Entry::default()
                 }),
         );
         self.indexed = catalogue
             .iter()
             .map(|entry| {
-                let item = self.by_id.get(&entry.stack.id).map(|&i| &self.items[i]);
-                Indexed::new(entry, item)
+                let index = self.by_id.get(&entry.stack.id).copied();
+                let item = index.map(|i| &self.items[i]);
+                let has_recipe = index.is_some_and(|i| self.recipe_index.makes(i));
+                Indexed::new(entry, item, has_recipe)
             })
             .collect();
         self.catalogue = catalogue;
@@ -485,6 +486,7 @@ mod tests {
             name: name.into(),
             tooltip: tooltip.iter().map(|s| (*s).to_owned()).collect(),
             tabs: tabs.iter().map(|s| (*s).to_owned()).collect(),
+            ..Entry::default()
         }
     }
 
@@ -979,6 +981,103 @@ mod tests {
         browser.handle(Event::SelectStation(0), false, &[]);
         assert_eq!(browser.shown_window(), (0, 601));
         assert_eq!(browser.shown_book_ids().len(), 240);
+    }
+
+    #[test]
+    fn search_forgives_accents_and_typos_and_reads_filters() {
+        let (mut items, recipes) = fixture();
+        items.push(ItemInfo {
+            id: "minecraft:diamond_pickaxe".into(),
+            name: "Picareta de Diamante".into(),
+            tags: vec![],
+        });
+        items.push(ItemInfo {
+            id: "minecraft:apple".into(),
+            name: "Maçã".into(),
+            tags: vec![],
+        });
+        let (mut browser, _) = Browser::new(items, recipes);
+        let props = |durability, nutrition: Option<u32>, rarity: &str| crate::EntryProps {
+            max_stack: if durability > 0 { 1 } else { 64 },
+            durability,
+            nutrition,
+            rarity: rarity.into(),
+            enchantable: durability > 0,
+            block: false,
+        };
+        browser.set_catalogue(vec![
+            Entry {
+                aliases: vec!["Diamond Pickaxe".into()],
+                props: props(1561, None, "common"),
+                ..entry(
+                    "minecraft:diamond_pickaxe",
+                    "Picareta de Diamante",
+                    "",
+                    &[],
+                    &[],
+                )
+            },
+            Entry {
+                aliases: vec!["Apple".into()],
+                props: props(0, Some(4), "common"),
+                ..entry("minecraft:apple", "Maçã", "", &[], &[])
+            },
+            Entry {
+                props: props(0, None, "common"),
+                ..entry("minecraft:stick", "Stick", "", &[], &[])
+            },
+        ]);
+        let search =
+            |b: &mut Browser, q: &str| shown(&b.handle(Event::Search(q.into()), false, &[]));
+        // Accents, the English alias and one typo.
+        assert_eq!(search(&mut browser, "maca"), ["minecraft:apple"]);
+        assert_eq!(
+            search(&mut browser, "pickaxe"),
+            ["minecraft:diamond_pickaxe"]
+        );
+        assert_eq!(
+            search(&mut browser, "diamnod"),
+            ["minecraft:diamond_pickaxe"]
+        );
+        assert_eq!(
+            search(&mut browser, "picarte"),
+            ["minecraft:diamond_pickaxe"]
+        );
+        assert!(search(&mut browser, "sti").contains(&"minecraft:stick".to_owned()));
+        // Short terms need the exact letters.
+        assert!(search(&mut browser, "stq").is_empty());
+        // Filters.
+        assert_eq!(search(&mut browser, "is:food"), ["minecraft:apple"]);
+        assert_eq!(
+            search(&mut browser, "dur>1000"),
+            ["minecraft:diamond_pickaxe"]
+        );
+        assert_eq!(
+            search(&mut browser, "stack:1"),
+            ["minecraft:diamond_pickaxe"]
+        );
+        assert_eq!(
+            search(&mut browser, "nutrition>3 -is:enchantable"),
+            ["minecraft:apple"]
+        );
+        // Planks have a recipe; logs don't.
+        assert!(search(&mut browser, "has:recipe").contains(&"minecraft:oak_planks".to_owned()));
+        assert!(!search(&mut browser, "no:recipe").contains(&"minecraft:oak_planks".to_owned()));
+        // Identifiers with a colon stay identifiers.
+        assert_eq!(search(&mut browser, "minecraft:apple"), ["minecraft:apple"]);
+    }
+
+    #[test]
+    fn exact_matches_come_before_typo_matches() {
+        let (items, recipes) = fixture();
+        let (mut browser, _) = Browser::new(items, recipes);
+        browser.set_catalogue(vec![
+            entry("minecraft:oak_log", "Stock", "", &[], &[]),
+            entry("minecraft:stick", "Stick", "", &[], &[]),
+        ]);
+        let found = shown(&browser.handle(Event::Search("stick".into()), false, &[]));
+        assert_eq!(found[0], "minecraft:stick");
+        assert!(found.contains(&"minecraft:oak_log".to_owned()));
     }
 
     #[test]

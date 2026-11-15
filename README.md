@@ -12,6 +12,12 @@ through Horizon's native mod system.
   alternatives (`|`). The settings page sets each prefix to *Enabled* (plain
   words search it too), *Require prefix* or *Disabled*; tooltips and identifiers
   are searched by plain words by default.
+- Beyond JEI, plain words ignore accents (`maca` finds *Maçã*), also match the
+  English name in another language, and forgive one typo in words of four
+  letters or more (exact matches come first). Filters narrow the list:
+  `is:food`, `is:block`, `is:enchantable`, `is:tool`, `has:recipe`, `no:recipe`,
+  `rarity:epic`, and numbers with `stack`, `dur` and `nutrition` (`stack:1`,
+  `dur>500`, `nutrition<4`).
 - Press **Ctrl+O** to hide or show the overlay (remembered between sessions).
 - The settings page orders the list by creative tabs (the default), mod or name,
   and has JEI's edit mode: while it is on, clicking an entry hides it (Ctrl+click

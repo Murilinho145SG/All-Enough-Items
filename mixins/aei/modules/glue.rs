@@ -113,15 +113,37 @@ fn catalogue(game: &Game<'_>) -> Vec<model::Entry> {
             let name = lines.next().unwrap_or_default();
             let (id, components) = key(stack);
             let tabs = tabs.get(&(id.clone(), components.clone())).cloned();
+            // The English name too, for players who follow English guides.
+            let english = game.pack.names.item(&id);
+            let aliases = if english.to_lowercase() != name.to_lowercase() {
+                vec![english]
+            } else {
+                Vec::new()
+            };
+            let info = game.items().get(&id);
+            let props = game.enchantments().props(&id);
+            let rarity = horizon_client::item_tooltip::rarity(
+                stack,
+                props.map_or("common", |p| p.rarity.as_str()),
+            );
             model::Entry {
                 stack: model::Stack {
-                    id,
+                    id: id.clone(),
                     count: 1,
                     components,
                 },
                 name,
                 tooltip: lines.collect(),
                 tabs: tabs.unwrap_or_default(),
+                aliases,
+                props: model::EntryProps {
+                    max_stack: info.map_or(64, |i| i.max_stack),
+                    durability: info.map_or(0, |i| i.max_damage),
+                    nutrition: info.and_then(|i| i.food).map(|(points, _)| points),
+                    rarity: rarity.to_owned(),
+                    enchantable: game.enchantments().enchantable(&id) > 0,
+                    block: info.is_some_and(|i| i.block.is_some()),
+                },
             }
         })
         .collect()

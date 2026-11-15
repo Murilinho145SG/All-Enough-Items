@@ -8,6 +8,11 @@ pub(super) struct RecipeIndex {
 }
 
 impl RecipeIndex {
+    /// Whether any recipe makes registry item `item`.
+    pub(super) fn makes(&self, item: usize) -> bool {
+        self.produces.contains_key(&item)
+    }
+
     pub(super) fn new(recipes: &[Recipe]) -> Self {
         let mut index = Self::default();
         for (id, recipe) in recipes.iter().enumerate() {
