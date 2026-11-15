@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 mod bookmarks;
 mod history;
+mod listing;
 mod recipes;
 mod search;
 
@@ -31,6 +32,12 @@ pub struct Browser {
     search: SearchQuery,
     search_modes: SearchModes,
     bookmarks: Vec<crate::Bookmark>,
+    /// Catalogue indexes in display order.
+    order: Vec<usize>,
+    sort_order: crate::SortOrder,
+    /// Hidden `(item, components)`; `*` components hide every stack of the item.
+    hidden: std::collections::HashSet<(String, String)>,
+    edit_mode: bool,
     history: history::History,
     shown_recipe_ids: Vec<usize>,
 }
@@ -102,6 +109,7 @@ impl Browser {
             })
             .collect();
         self.catalogue = catalogue;
+        self.sort(self.sort_order);
     }
 
     fn render_page(&mut self, known: &[i32]) -> Update {
@@ -252,6 +260,22 @@ impl Browser {
                 self.search = SearchQuery::parse(&self.query, &modes);
                 vec![self.item_list()]
             }
+            Event::SetSort(order) => {
+                if order == self.sort_order {
+                    return Vec::new();
+                }
+                self.sort_order = order;
+                self.sort(order);
+                vec![self.item_list()]
+            }
+            Event::SetEditMode(on) => {
+                if on == self.edit_mode {
+                    return Vec::new();
+                }
+                self.edit_mode = on;
+                vec![self.item_list()]
+            }
+            Event::ToggleHidden { index, wildcard } => self.toggle_hidden(index, wildcard),
             Event::ClickItem { index, right } => {
                 let Some(&entry) = self.filtered_items.get(index) else {
                     return Vec::new();
@@ -703,6 +727,62 @@ mod tests {
             &[],
         );
         assert!(matches!(&given[0], Update::Give { stack, count: 1 } if stack.count == 1));
+    }
+
+    #[test]
+    fn sorting_and_edit_mode_hide_entries_and_save_them() {
+        let (mut items, recipes) = fixture();
+        items.push(ItemInfo {
+            id: "amod:apple".into(),
+            name: "Apple".into(),
+            tags: vec![],
+        });
+        let (mut browser, _) = Browser::new(items, recipes);
+        browser.set_catalogue(vec![
+            entry("amod:apple", "Apple", "", &[], &[]),
+            entry("minecraft:stick", "Stick", "", &[], &[]),
+            entry("minecraft:stick", "Stick", "[custom_name='x']", &[], &[]),
+            entry("minecraft:oak_log", "Oak Log", "", &[], &[]),
+        ]);
+        let sort = |b: &mut Browser, order| shown(&b.handle(Event::SetSort(order), false, &[]));
+        assert_eq!(
+            sort(&mut browser, crate::SortOrder::Mod)[0],
+            "minecraft:stick"
+        );
+        assert_eq!(sort(&mut browser, crate::SortOrder::Name)[0], "amod:apple");
+        assert_eq!(
+            sort(&mut browser, crate::SortOrder::Creative)[0],
+            "amod:apple"
+        );
+
+        // Hidden entries leave the list, and edit mode shows them marked.
+        browser.handle(Event::SetEditMode(true), false, &[]);
+        let hide = |b: &mut Browser, index, wildcard| {
+            b.handle(Event::ToggleHidden { index, wildcard }, false, &[])
+        };
+        assert_eq!(hide(&mut browser, 1, true)[0], Update::Hidden);
+        assert!(browser.shown_hidden(1) && browser.shown_hidden(2));
+        let saved = browser.hidden_text();
+        assert_eq!(saved, "minecraft:stick\t*\n");
+        let list = shown(&browser.handle(Event::SetEditMode(false), false, &[]));
+        assert_eq!(
+            list,
+            ["amod:apple", "minecraft:oak_log", "minecraft:oak_planks"]
+        );
+        // Showing one stack of a wildcard-hidden item shows the item again.
+        browser.handle(Event::SetEditMode(true), false, &[]);
+        hide(&mut browser, 2, false);
+        assert_eq!(browser.hidden_text(), "");
+        hide(&mut browser, 2, false);
+        assert_eq!(
+            browser.hidden_text(),
+            "minecraft:stick\t[custom_name='x']\n"
+        );
+        browser.handle(Event::SetEditMode(false), false, &[]);
+        let Update::ItemList(list) = browser.load_hidden(&saved) else {
+            panic!("expected item list")
+        };
+        assert_eq!(list.len(), 3);
     }
 
     #[test]

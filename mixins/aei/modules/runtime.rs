@@ -10,6 +10,6 @@ pub const KEY_BOOKMARK: [&str; 3] = ["bookmark", "Bookmark item", "key.keyboard.
 
 pub use aei_engine::{
     Bookmark, Browser, Entry, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard, RecipeKind,
-    SearchMode, SearchModes, Stack, Update,
+    SearchMode, SearchModes, SortOrder, Stack, Update,
 };
 pub use aei_engine::{NOTE_SEPARATOR, SHAPELESS_NOTE, mod_name, viewer};

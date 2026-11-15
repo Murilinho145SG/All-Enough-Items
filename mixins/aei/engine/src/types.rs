@@ -81,6 +81,42 @@ pub struct Entry {
     pub tabs: Vec<String>,
 }
 
+/// The item list's order (JEI's ingredient sort stages, as one choice).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SortOrder {
+    /// The creative tabs' order (JEI's default for one mod).
+    #[default]
+    Creative,
+    /// By mod, Minecraft first, then the creative order within each mod.
+    Mod,
+    /// Alphabetically by name.
+    Name,
+}
+
+impl SortOrder {
+    pub const ALL: [Self; 3] = [Self::Creative, Self::Mod, Self::Name];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Creative => "creative",
+            Self::Mod => "mod",
+            Self::Name => "name",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|order| order.name() == text)
+    }
+
+    pub fn next(self) -> Self {
+        match self {
+            Self::Creative => Self::Mod,
+            Self::Mod => Self::Name,
+            Self::Name => Self::Creative,
+        }
+    }
+}
+
 /// A bookmarked stack, or a bookmarked recipe shown by its output.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Bookmark {
@@ -249,6 +285,15 @@ pub enum Event {
     },
     Search(String),
     SetSearchModes(SearchModes),
+    SetSort(SortOrder),
+    /// Edit mode shows hidden entries (marked) and makes clicks hide or show them.
+    SetEditMode(bool),
+    /// Edit mode's click: hide or show list entry `index`, or every stack of its item
+    /// when `wildcard` (JEI's Ctrl+click).
+    ToggleHidden {
+        index: usize,
+        wildcard: bool,
+    },
     ClickItem {
         index: usize,
         right: bool,
@@ -273,6 +318,8 @@ pub enum Update {
     /// The bookmark list changed: show it and save [`crate::Browser::bookmarks_text`].
     Bookmarks(Vec<Bookmark>),
     ItemList(Vec<Stack>),
+    /// The hidden entries changed: save [`crate::Browser::hidden_text`].
+    Hidden,
     RecipeList(RecipePage),
     /// Cheat mode: give the player `count` of `stack` (at most one full stack).
     Give {

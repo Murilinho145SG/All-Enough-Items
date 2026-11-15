@@ -511,6 +511,10 @@ fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, items: &Sidebar, layout
         let (x, y) = layout.slot(offset);
         let rect = [x, y, viewer::SLOT, viewer::SLOT];
         draw_stack(game, batch, stack, rect, &format!("Item {index}"), true);
+        if crate::game::aei_glue::shown_hidden(index) {
+            // Edit mode: a hidden entry, shaded red as JEI marks it.
+            paint::fill(game, batch, rect, rgba(255, 0, 0, 0x60));
+        }
     }
 
     let [back, forward] = items.arrows();

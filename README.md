@@ -13,6 +13,10 @@ through Horizon's native mod system.
   words search it too), *Require prefix* or *Disabled*; tooltips and identifiers
   are searched by plain words by default.
 - Press **Ctrl+O** to hide or show the overlay (remembered between sessions).
+- The settings page orders the list by creative tabs (the default), mod or name,
+  and has JEI's edit mode: while it is on, clicking an entry hides it (Ctrl+click
+  hides every stack of that item); hidden entries show shaded red until edit mode
+  is off, then leave the list. The hidden list is saved.
 - An optional setting adds the item's mod name to every item tooltip, in blue
   italics as JEI does (off by default, since it changes vanilla tooltips).
 - Hover an item and press **R** for recipes or **U** for uses. In the catalogue,

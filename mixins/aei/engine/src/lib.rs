@@ -10,7 +10,7 @@ pub mod viewer;
 pub use browser::Browser;
 pub use types::{
     Bookmark, Entry, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard, RecipeKind,
-    RecipePage, SearchMode, SearchModes, Stack, Update,
+    RecipePage, SearchMode, SearchModes, SortOrder, Stack, Update,
 };
 pub(crate) use types::{Lookup, Station};
 

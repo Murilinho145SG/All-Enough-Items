@@ -203,10 +203,11 @@ impl Browser {
     pub(super) fn item_list(&mut self) -> Update {
         let (search, modes) = (&self.search, &self.search_modes);
         self.filtered_items = self
-            .indexed
+            .order
             .iter()
-            .enumerate()
-            .filter_map(|(index, entry)| search.matches(entry, modes).then_some(index))
+            .copied()
+            .filter(|&index| self.edit_mode || !self.is_hidden(index))
+            .filter(|&index| search.matches(&self.indexed[index], modes))
             .take(ITEM_LIMIT)
             .collect();
         Update::ItemList(

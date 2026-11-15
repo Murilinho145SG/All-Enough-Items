@@ -240,6 +240,11 @@ fn publish(game: &mut Game<'_>, update: model::Update) {
             );
         }
         model::Update::Give { stack, count } => give(game, &stack, count),
+        model::Update::Hidden => {
+            if let Some(text) = with_browser(|browser| browser.hidden_text()) {
+                game.native_set_setting(model::ID, SETTING_HIDDEN_ITEMS, &text);
+            }
+        }
         model::Update::PlaceKnownRecipe(id) => {
             match game.native_place_recipe(id, game.has_shift_down()) {
                 Err(message) => game.native_chat(&message),
@@ -286,6 +291,16 @@ pub(super) fn frame(game: &mut Game<'_>) {
                 tables.recipes.iter().map(recipe).collect(),
             );
             browser.handle(model::Event::SetSearchModes(search_modes(game)), false, &[]);
+            browser.handle(model::Event::SetSort(sort_order(game)), false, &[]);
+            browser.handle(
+                model::Event::SetEditMode(flag(game, SETTING_EDIT)),
+                false,
+                &[],
+            );
+            let hidden = game
+                .native_setting(model::ID, SETTING_HIDDEN_ITEMS)
+                .unwrap_or_default();
+            browser.load_hidden(&hidden);
             load_flags(game);
             let saved = game
                 .native_setting(model::ID, SETTING_BOOKMARKS)
@@ -340,6 +355,12 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
     }
     let event = match event {
         NativePanelEvent::Search(query) => model::Event::Search(query.clone()),
+        NativePanelEvent::Clicked { index, .. } if flag(game, SETTING_EDIT) => {
+            model::Event::ToggleHidden {
+                index: *index as usize,
+                wildcard: game.has_control_down(),
+            }
+        }
         NativePanelEvent::Clicked { index, right } => model::Event::ClickItem {
             index: *index as usize,
             right: *right,
@@ -452,6 +473,9 @@ const SETTING_GIVE: &str = "give";
 const SETTING_HIDDEN: &str = "hidden";
 const SETTING_MOD_NAMES: &str = "mod_names";
 const SETTING_CURSOR: &str = "give_cursor";
+const SETTING_EDIT: &str = "edit";
+const SETTING_SORT: &str = "sort";
+const SETTING_HIDDEN_ITEMS: &str = "hidden_items";
 
 fn flag(game: &Game<'_>, key: &str) -> bool {
     game.native_setting(model::ID, key).as_deref() == Some("true")
@@ -525,60 +549,104 @@ fn on_off(on: bool) -> &'static str {
     if on { "ON" } else { "OFF" }
 }
 
-/// The settings page's buttons, in [`settings_click`]'s order.
-pub(super) fn settings_labels(game: &Game<'_>) -> Vec<String> {
-    let mut labels = vec![
-        format!(
-            "Panel clicks give items in Creative: {}",
-            on_off(flag(game, SETTING_GIVE))
-        ),
-        format!(
-            "Mod name in tooltips: {}",
-            on_off(flag(game, SETTING_MOD_NAMES))
-        ),
+/// One button of the settings page.
+#[derive(Clone, Copy)]
+enum Setting {
+    /// An ON/OFF flag: its key and label.
+    Flag(&'static str, &'static str),
+    Sort,
+    /// The search mode of [`model::SearchModes::FIELDS`]'s field.
+    Search(usize),
+}
+
+/// The settings page's buttons, in order.
+fn settings() -> Vec<Setting> {
+    let mut list = vec![
+        Setting::Flag(SETTING_GIVE, "Cheat mode (clicks give items)"),
+        Setting::Flag(SETTING_EDIT, "Edit mode (clicks hide items)"),
+        Setting::Sort,
+        Setting::Flag(SETTING_MOD_NAMES, "Mod name in tooltips"),
+        Setting::Flag(SETTING_CURSOR, "Cheat items in Creative go to the cursor"),
     ];
+    list.extend((0..model::SearchModes::FIELDS.len()).map(Setting::Search));
+    list
+}
+
+fn sort_order(game: &Game<'_>) -> model::SortOrder {
+    game.native_setting(model::ID, SETTING_SORT)
+        .and_then(|value| model::SortOrder::parse(&value))
+        .unwrap_or_default()
+}
+
+pub(super) fn settings_labels(game: &Game<'_>) -> Vec<String> {
     let modes = search_modes(game);
-    for (field, (_, prefix, name)) in model::SearchModes::FIELDS.iter().enumerate() {
-        let mode = match modes.get(field) {
-            model::SearchMode::Enabled => "Enabled",
-            model::SearchMode::RequirePrefix => "Require prefix",
-            model::SearchMode::Disabled => "Disabled",
-        };
-        labels.push(format!("Search {name} ({prefix}): {mode}"));
-    }
-    labels
+    settings()
+        .into_iter()
+        .map(|setting| match setting {
+            Setting::Flag(key, label) => format!("{label}: {}", on_off(flag(game, key))),
+            Setting::Sort => {
+                let order = match sort_order(game) {
+                    model::SortOrder::Creative => "Creative tabs",
+                    model::SortOrder::Mod => "Mod",
+                    model::SortOrder::Name => "Name",
+                };
+                format!("Item list order: {order}")
+            }
+            Setting::Search(field) => {
+                let (_, prefix, name) = model::SearchModes::FIELDS[field];
+                let mode = match modes.get(field) {
+                    model::SearchMode::Enabled => "Enabled",
+                    model::SearchMode::RequirePrefix => "Require prefix",
+                    model::SearchMode::Disabled => "Disabled",
+                };
+                format!("Search {name} ({prefix}): {mode}")
+            }
+        })
+        .collect()
 }
 
 pub(super) fn settings_click(game: &mut Game<'_>, button: usize) {
-    match button {
-        0..=2 => {
-            let key = [SETTING_GIVE, SETTING_MOD_NAMES, SETTING_CURSOR][button];
-            let on = flag(game, key);
-            game.native_set_setting(model::ID, key, if on { "false" } else { "true" });
+    let Some(setting) = settings().get(button).copied() else {
+        return;
+    };
+    let event = match setting {
+        Setting::Flag(key, _) => {
+            let on = !flag(game, key);
+            game.native_set_setting(model::ID, key, if on { "true" } else { "false" });
             load_flags(game);
+            if key != SETTING_EDIT {
+                return;
+            }
+            model::Event::SetEditMode(on)
         }
-        n if n - 3 < model::SearchModes::FIELDS.len() => {
-            let field = n - 3;
+        Setting::Sort => {
+            let next = sort_order(game).next();
+            game.native_set_setting(model::ID, SETTING_SORT, next.name());
+            model::Event::SetSort(next)
+        }
+        Setting::Search(field) => {
             let mut modes = search_modes(game);
             let next = modes.get(field).next();
             modes.set(field, next);
             game.native_set_setting(model::ID, model::SearchModes::FIELDS[field].0, next.name());
-            let known = game.native_known_recipes();
-            let updates = with_browser(|browser| {
-                browser.handle(model::Event::SetSearchModes(modes), false, &known)
-            })
-            .unwrap_or_default();
-            for update in updates {
-                match update {
-                    model::Update::ItemList(items) => {
-                        game.aei_show_search_result(items.iter().map(native).collect());
-                    }
-                    other => publish(game, other),
-                }
-            }
+            model::Event::SetSearchModes(modes)
         }
-        _ => {}
+    };
+    let known = game.native_known_recipes();
+    let updates = with_browser(|browser| browser.handle(event, false, &known)).unwrap_or_default();
+    for update in updates {
+        match update {
+            model::Update::ItemList(items) => {
+                game.aei_show_search_result(items.iter().map(native).collect());
+            }
+            other => publish(game, other),
+        }
     }
+}
+
+/// Whether the shown list entry `index` is hidden (edit mode marks it).
+pub(super) fn shown_hidden(index: usize) -> bool {
+    with_browser(|browser| browser.shown_hidden(index)).unwrap_or(false)
 }
 
 /// JEI's Backspace: back to the previous lookup, when a recipe page is open.
