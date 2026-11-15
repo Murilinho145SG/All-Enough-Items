@@ -554,13 +554,14 @@ pub struct PlanPanel {
     pub buttons: [Rect; 4],
     /// Where the count is written, between the buttons.
     pub count: Rect,
-    /// Each section's label and cells (cut to what fits).
-    pub sections: [(Rect, Vec<Rect>); 3],
+    /// Each section's label and cells (cut to what fits): targets, materials, steps
+    /// and leftovers.
+    pub sections: [(Rect, Vec<Rect>); 4],
 }
 
 impl PlanPanel {
-    /// The panel for `counts` cells per section (materials, steps, leftovers).
-    pub fn new(screen: [f32; 2], counts: [usize; 3]) -> Option<Self> {
+    /// The panel for `counts` cells per section (targets, materials, steps, leftovers).
+    pub fn new(screen: [f32; 2], counts: [usize; 4]) -> Option<Self> {
         let [sw, sh] = screen;
         if sw < WIDTH || sh < MIN_HEIGHT {
             return None;
@@ -748,7 +749,7 @@ mod tests {
 
     #[test]
     fn the_plan_panel_stacks_its_sections_inside_the_window() {
-        let panel = PlanPanel::new([480.0, 270.0], [12, 3, 2]).unwrap();
+        let panel = PlanPanel::new([480.0, 270.0], [1, 12, 3, 2]).unwrap();
         let [x, y, w, h] = panel.area;
         for (label, cells) in &panel.sections {
             assert!(label[1] >= y);
@@ -757,10 +758,10 @@ mod tests {
                 assert!(cell[1] + cell[3] <= y + h);
             }
         }
-        assert_eq!(panel.sections[0].1.len(), 12);
+        assert_eq!(panel.sections[1].1.len(), 12);
         // A long list is cut to what fits.
-        let full = PlanPanel::new([480.0, 270.0], [500, 500, 500]).unwrap();
-        assert!(full.sections[0].1.len() < 500);
+        let full = PlanPanel::new([480.0, 270.0], [1, 500, 500, 500]).unwrap();
+        assert!(full.sections[1].1.len() < 500);
         assert!(panel.buttons[1][0] + 24.0 <= panel.count[0]);
     }
 

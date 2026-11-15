@@ -1091,8 +1091,8 @@ fn save_recent(game: &mut Game<'_>) {
     }
 }
 
-/// The material plan for `count` of `target`, after the player's inventory.
-pub(super) fn plan(game: &Game<'_>, target: &NativeStack, count: u32) -> Option<model::Plan> {
+/// The material plan for the calculator's targets, after the player's inventory.
+pub(super) fn plan(game: &Game<'_>, targets: &[(NativeStack, u32)]) -> Option<model::Plan> {
     let inventory: Vec<model::Stack> = game
         .inventory
         .iter()
@@ -1103,5 +1103,9 @@ pub(super) fn plan(game: &Game<'_>, target: &NativeStack, count: u32) -> Option<
             components: String::new(),
         })
         .collect();
-    with_browser(|browser| browser.plan(&stack(target), count, &inventory))
+    let targets: Vec<(model::Stack, u32)> = targets
+        .iter()
+        .map(|(target, count)| (stack(target), *count))
+        .collect();
+    with_browser(|browser| browser.plan_all(&targets, &inventory))
 }

@@ -28,8 +28,9 @@ struct Navigation {
 thread_local! {
     static ITEM_SCROLL: RefCell<i32> = const { RefCell::new(0) };
     static BOOKMARK_PAGE: RefCell<usize> = const { RefCell::new(0) };
-    /// The material calculator: its item and count, while it is open.
-    static PLAN: RefCell<Option<(BrowserStack, u32)>> = const { RefCell::new(None) };
+    /// The material calculator while it is open: its targets (a shopping list) with
+    /// their counts, and the one the count buttons change.
+    static PLAN: RefCell<Option<(Vec<(BrowserStack, u32)>, usize)>> = const { RefCell::new(None) };
     /// The bookmark a left press went down on: its release clicks it, or moves it to
     /// the bookmark it is released over (JEI's drag to reorder).
     static BOOKMARK_DRAG: RefCell<Option<usize>> = const { RefCell::new(None) };
@@ -794,35 +795,54 @@ fn turn_bookmark_page(list: &BookmarkList, forward: bool) {
     });
 }
 
-/// The open calculator's item and count.
-fn plan_state() -> Option<(BrowserStack, u32)> {
+/// The open calculator's targets and focused target.
+fn plan_state() -> Option<(Vec<(BrowserStack, u32)>, usize)> {
     PLAN.with(|cell| cell.borrow().clone())
 }
 
-/// What the calculator shows: the plan, its panel, and each section's stacks with the
-/// tooltip lines they add.
+/// What the calculator shows: the plan of all its targets and its panel.
 struct PlanView {
+    targets: Vec<(BrowserStack, u32)>,
+    focus: usize,
     plan: crate::game::aei::Plan,
     panel: PlanPanel,
 }
 
 impl PlanView {
     fn new(game: &Game<'_>, size: [f32; 2]) -> Option<Self> {
-        let (target, count) = plan_state()?;
-        let plan = crate::game::aei_glue::plan(game, &target, count)?;
-        let counts = [plan.materials.len(), plan.steps.len(), plan.leftovers.len()];
+        let (targets, focus) = plan_state()?;
+        let plan = crate::game::aei_glue::plan(game, &targets)?;
+        let counts = [
+            targets.len(),
+            plan.materials.len(),
+            plan.steps.len(),
+            plan.leftovers.len(),
+        ];
         let panel = PlanPanel::new(size, counts)?;
-        Some(Self { plan, panel })
+        Some(Self {
+            targets,
+            focus,
+            plan,
+            panel,
+        })
     }
 
-    /// Every drawn cell: (section, index, stack with its count, rect).
+    /// Every drawn cell: (section, index, stack with its count, rect). Section 0 holds
+    /// the targets.
     fn cells(&self) -> Vec<(usize, usize, BrowserStack, viewer::Rect)> {
         let native = |id: &str, count: u32| BrowserStack {
             item: id.to_owned(),
             count,
             components: String::new(),
         };
-        let stacks: [Vec<BrowserStack>; 3] = [
+        let stacks: [Vec<BrowserStack>; 4] = [
+            self.targets
+                .iter()
+                .map(|(stack, count)| BrowserStack {
+                    count: *count,
+                    ..stack.clone()
+                })
+                .collect(),
             self.plan
                 .materials
                 .iter()
@@ -851,14 +871,18 @@ impl PlanView {
     /// The tooltip lines a cell adds below its item's.
     fn lines(&self, section: usize, index: usize) -> Vec<String> {
         match section {
-            0 => self.plan.materials.get(index).map_or_else(Vec::new, |m| {
+            0 => vec![
+                "\u{a7}7Click: change its count".to_owned(),
+                "\u{a7}7Right-click: remove it".to_owned(),
+            ],
+            1 => self.plan.materials.get(index).map_or_else(Vec::new, |m| {
                 let colour = if m.have >= m.need { "a" } else { "c" };
                 vec![format!(
                     "\u{a7}{colour}Need {} \u{b7} have {}",
                     m.need, m.have
                 )]
             }),
-            1 => self.plan.steps.get(index).map_or_else(Vec::new, |s| {
+            2 => self.plan.steps.get(index).map_or_else(Vec::new, |s| {
                 vec![format!(
                     "\u{a7}7{} \u{d7} {} \u{2192} {}",
                     s.crafts,
@@ -874,13 +898,15 @@ impl PlanView {
 fn draw_plan(game: &mut Game<'_>, batch: &mut HudBatch, view: &PlanView) {
     let panel = &view.panel;
     paint::window(game, batch, panel.area);
-    let name = game
-        .pack
-        .names
-        .display_item(&view.plan.target.id)
-        .to_string();
+    let title = match view.targets.as_slice() {
+        [(only, _)] => {
+            let name = game.pack.names.display_item(&only.item).to_string();
+            format!("Materials: {name}")
+        }
+        targets => format!("Shopping list: {} items", targets.len()),
+    };
     paint::strip(game, batch, panel.title);
-    paint::title(game, batch, &format!("Materials: {name}"), panel.title);
+    paint::title(game, batch, &title, panel.title);
     for (rect, (label, step)) in panel.buttons.iter().zip([
         ("-64", "minus 64"),
         ("-1", "minus 1"),
@@ -889,21 +915,23 @@ fn draw_plan(game: &mut Game<'_>, batch: &mut HudBatch, view: &PlanView) {
     ]) {
         paint::text_button(game, batch, *rect, label, &format!("Plan count {step}"));
     }
+    let count = view.targets.get(view.focus).map_or(1, |(_, n)| *n);
     paint::strip(game, batch, panel.count);
-    paint::title(
-        game,
-        batch,
-        &format!("\u{d7} {}", view.plan.count),
-        panel.count,
-    );
-    let titles = ["Raw materials", "Crafting steps", "Left over"];
+    paint::title(game, batch, &format!("\u{d7} {count}"), panel.count);
+    let titles = [
+        "Targets (T over an item adds one)",
+        "Raw materials",
+        "Crafting steps",
+        "Left over",
+    ];
     for ((label, _), title) in panel.sections.iter().zip(titles) {
         let [x, y, _, _] = *label;
         batch.text(&game.gui.atlas, title, x, y, paint::grey_text(), false);
     }
+    let names = ["target", "material", "step", "leftover"];
     for (section, index, stack, rect) in view.cells() {
         paint::slot(game, batch, rect);
-        let label = format!("Plan {} {index}", ["material", "step", "leftover"][section]);
+        let label = format!("Plan {} {index}", names[section]);
         // The item alone: its count, which can pass 99, is written below.
         let single = BrowserStack {
             count: 1,
@@ -915,7 +943,6 @@ fn draw_plan(game: &mut Game<'_>, batch: &mut HudBatch, view: &PlanView) {
             rect,
             true,
         );
-        // The count, which can pass 99, written over the item.
         let text = stack.count.to_string();
         let font = &game.gui.atlas.font;
         let [x, y, w, h] = rect;
@@ -928,7 +955,7 @@ fn draw_plan(game: &mut Game<'_>, batch: &mut HudBatch, view: &PlanView) {
             paint::white(),
             true,
         );
-        let short = section == 0
+        let short = section == 1
             && view
                 .plan
                 .materials
@@ -937,11 +964,18 @@ fn draw_plan(game: &mut Game<'_>, batch: &mut HudBatch, view: &PlanView) {
         if short {
             paint::fill(game, batch, rect, rgba(255, 0, 0, 0x50));
         }
+        if section == 0 && index == view.focus && view.targets.len() > 1 {
+            let gold = rgba(255, 200, 40, 255);
+            paint::fill(game, batch, [x, y, w, 1.0], gold);
+            paint::fill(game, batch, [x, y + h - 1.0, w, 1.0], gold);
+            paint::fill(game, batch, [x, y, 1.0, h], gold);
+            paint::fill(game, batch, [x + w - 1.0, y, 1.0, h], gold);
+        }
     }
 }
 
-/// A press on the open calculator: count buttons, or a cell's recipes (left) or uses
-/// (right), which closes it.
+/// A press on the open calculator: count buttons; a target to focus (right: remove);
+/// any other cell's recipes (left) or uses (right), which closes it.
 fn press_plan(game: &mut Game<'_>, view: &PlanView, right: bool) {
     let steps = [-64i64, -1, 1, 64];
     if let Some(i) = view
@@ -953,19 +987,41 @@ fn press_plan(game: &mut Game<'_>, view: &PlanView, right: bool) {
         change_plan_count(steps[i]);
         game.audio
             .play("minecraft:ui.button.click", None, 0.25, 1.0);
-    } else if let Some((_, _, stack, _)) = view
+    } else if let Some((section, index, stack, _)) = view
         .cells()
         .into_iter()
         .find(|(.., rect)| viewer::contains(*rect, game.cursor))
     {
-        PLAN.with(|cell| *cell.borrow_mut() = None);
-        crate::game::aei_glue::lookup(game, &stack, right);
+        if section == 0 {
+            PLAN.with(|cell| {
+                let mut state = cell.borrow_mut();
+                if let Some((targets, focus)) = state.as_mut() {
+                    if right {
+                        targets.remove(index.min(targets.len() - 1));
+                        *focus = (*focus).min(targets.len().saturating_sub(1));
+                    } else {
+                        *focus = index;
+                    }
+                }
+                if state
+                    .as_ref()
+                    .is_some_and(|(targets, _)| targets.is_empty())
+                {
+                    *state = None;
+                }
+            });
+        } else {
+            PLAN.with(|cell| *cell.borrow_mut() = None);
+            crate::game::aei_glue::lookup(game, &stack, right);
+        }
     }
 }
 
 fn change_plan_count(step: i64) {
     PLAN.with(|cell| {
-        if let Some((_, count)) = cell.borrow_mut().as_mut() {
+        if let Some((targets, focus)) = cell.borrow_mut().as_mut()
+            && let Some((_, count)) = targets.get_mut(*focus)
+        {
             *count = (i64::from(*count) + step).clamp(1, 9999) as u32;
         }
     });
@@ -1426,7 +1482,19 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
         if !beside {
             return ControlFlow::Break(true);
         }
-        PLAN.with(|cell| *cell.borrow_mut() = None);
+        // Searching and paging keep it open, to add more items; opening an item's
+        // recipes from a list closes it.
+        let opens = screen
+            .items
+            .as_ref()
+            .is_some_and(|(_, layout)| hovered_item(game, layout).is_some())
+            || screen
+                .bookmarks
+                .as_ref()
+                .is_some_and(|list| hovered_bookmark(game, list).is_some());
+        if opens {
+            PLAN.with(|cell| *cell.borrow_mut() = None);
+        }
     }
     if let Some((items, layout)) = &screen.items
         && (inside(game.cursor, items.area)
@@ -1611,8 +1679,23 @@ pub(super) fn back(game: &mut Game<'_>) -> ControlFlow<bool> {
 
 impl Game<'_> {
     /// Opens the material calculator for `stack` (the T key).
+    /// The T key: opens the material calculator for `stack`, or, while it is open,
+    /// adds `stack` to its shopping list (or focuses it if it is there).
     pub(in crate::game) fn aei_open_plan(&mut self, stack: BrowserStack) {
-        PLAN.with(|cell| *cell.borrow_mut() = Some((stack, 1)));
+        let stack = BrowserStack { count: 1, ..stack };
+        PLAN.with(|cell| {
+            let mut state = cell.borrow_mut();
+            match state.as_mut() {
+                Some((targets, focus)) => match targets.iter().position(|(s, _)| *s == stack) {
+                    Some(i) => *focus = i,
+                    None => {
+                        targets.push((stack, 1));
+                        *focus = targets.len() - 1;
+                    }
+                },
+                None => *state = Some((vec![(stack, 1)], 0)),
+            }
+        });
     }
 
     pub(in crate::game) fn aei_recipe_scroll(&self, amount: f64) -> bool {

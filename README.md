@@ -50,7 +50,9 @@ through Horizon's native mod system.
   crafting steps in order and what is left over. It picks crafting, then cooking,
   never unpacks storage blocks, avoids loops, and counts what the inventory
   already holds first (short materials are red). Escape closes it; clicking an
-  entry opens its recipes or uses.
+  entry opens its recipes or uses. While it is open, **T** over another item
+  adds it to a shopping list whose materials are summed; click a target to
+  change its count, right-click it to remove it.
 - An optional row at the bottom left holds the nine items looked up last (off by
   default; saved per instance).
 - Beyond JEI, the last ten lookups line up above the category tabs as a
