@@ -28,6 +28,9 @@ struct Navigation {
 thread_local! {
     static ITEM_SCROLL: RefCell<i32> = const { RefCell::new(0) };
     static BOOKMARK_PAGE: RefCell<usize> = const { RefCell::new(0) };
+    /// The bookmark a left press went down on: its release clicks it, or moves it to
+    /// the bookmark it is released over (JEI's drag to reorder).
+    static BOOKMARK_DRAG: RefCell<Option<usize>> = const { RefCell::new(None) };
     /// A window of a long category to show (offset, length), asked for where the game
     /// can't be changed (page turns, the wheel) and shown on the next frame.
     static PENDING_WINDOW: RefCell<Option<(usize, usize)>> = const { RefCell::new(None) };
@@ -693,6 +696,15 @@ fn draw_bookmarks(game: &mut Game<'_>, batch: &mut HudBatch, list: &BookmarkList
             paint::recipe_mark(game, batch, rect);
         }
     }
+    // A dragged bookmark follows the pointer once it leaves its cell.
+    if let Some(from) = BOOKMARK_DRAG.with(|cell| *cell.borrow())
+        && let Some((stack, _)) = bookmarks.get(from)
+        && hovered_bookmark(game, list).is_none_or(|(i, _)| i != from)
+        && let Some(item) = super::browser_stack(world_items!(game), stack)
+    {
+        let (cx, cy) = game.cursor;
+        game.draw_item(batch, &item, cx - 8.0, cy - 8.0);
+    }
     let [back, forward] = list.arrows();
     let [x, y, w, h] = list.nav;
     paint::strip(game, batch, [x + back[2], y, w - back[2] - forward[2], h]);
@@ -1127,8 +1139,12 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
             return ControlFlow::Break(true);
         }
         if let Some((index, _)) = hovered_bookmark(game, list) {
-            let event = crate::game::aei::Event::ClickBookmark { index, right };
-            crate::game::aei_glue::bookmark_event(game, event);
+            if right {
+                let event = crate::game::aei::Event::ClickBookmark { index, right };
+                crate::game::aei_glue::bookmark_event(game, event);
+            } else {
+                BOOKMARK_DRAG.with(|cell| *cell.borrow_mut() = Some(index));
+            }
             return ControlFlow::Break(true);
         }
     }
@@ -1275,6 +1291,29 @@ impl Game<'_> {
         let search = self.browser_search(&layout);
         search.focused = true;
         search.reset_blink();
+        true
+    }
+
+    /// A left release after a press on a bookmark: a click on it when released over it
+    /// (or off the list), else a move to the bookmark it is released over. True when
+    /// a bookmark press was pending.
+    pub(in crate::game) fn aei_bookmark_release(&mut self) -> bool {
+        let Some(from) = BOOKMARK_DRAG.with(|cell| cell.borrow_mut().take()) else {
+            return false;
+        };
+        let to = self.browser_batch().and_then(|batch| {
+            let recipes = self.panel.recipes.is_some();
+            let list = screen(self, &batch, recipes)?.bookmarks?;
+            hovered_bookmark(self, &list).map(|(i, _)| i)
+        });
+        let event = match to {
+            Some(to) if to != from => crate::game::aei::Event::MoveBookmark { from, to },
+            _ => crate::game::aei::Event::ClickBookmark {
+                index: from,
+                right: false,
+            },
+        };
+        crate::game::aei_glue::bookmark_event(self, event);
         true
     }
 
