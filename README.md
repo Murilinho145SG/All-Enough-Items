@@ -59,7 +59,8 @@ through Horizon's native mod system.
   items go to the inventory (or the cursor, on the creative screen, if set);
   otherwise AEI sends `/give`, which the server only allows with permission.
   A stack dropped on the list on the creative screen is deleted.
-- Press **Ctrl+F** to focus the search field.
+- Press **Ctrl+F** to focus the search field. While typing, **Up** and **Down**
+  recall earlier searches (kept when you press Enter or open an item from them).
 - Scroll or click arrows to turn pages. Right-click the search field to clear it.
 - Click **+** to move a recipe's ingredients into the crafting grid through the
   vanilla recipe book (**Shift-click** for as many sets as the inventory allows);

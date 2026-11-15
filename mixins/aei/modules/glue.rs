@@ -506,6 +506,10 @@ pub(super) fn frame(game: &mut Game<'_>) {
                 .native_setting(model::ID, SETTING_HIDDEN_ITEMS)
                 .unwrap_or_default();
             browser.load_hidden(&hidden);
+            let history = game
+                .native_setting(model::ID, SETTING_SEARCH_HISTORY)
+                .unwrap_or_default();
+            browser.load_search_history(&history);
             // JEI's editable category order: written once with every category, then read.
             match game.native_setting(model::ID, SETTING_CATEGORIES) {
                 Some(text) => browser.load_categories(&text),
@@ -620,8 +624,13 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
 
     let known = game.native_known_recipes();
     let give_enabled = flag(game, SETTING_GIVE);
+    let before = with_browser(|browser| browser.search_history_text());
     let updates =
         with_browser(|browser| browser.handle(event, give_enabled, &known)).unwrap_or_default();
+    let after = with_browser(|browser| browser.search_history_text());
+    if let Some(text) = after.filter(|text| Some(text) != before.as_ref()) {
+        game.native_set_setting(model::ID, SETTING_SEARCH_HISTORY, &text);
+    }
     for update in updates {
         if matches!(&update, model::Update::RecipeList(_)) {
             game.aei_reset_viewer();
@@ -692,6 +701,7 @@ const SETTING_COLUMNS: &str = "columns";
 const SETTING_SORT: &str = "sort";
 const SETTING_HIDDEN_ITEMS: &str = "hidden_items";
 const SETTING_CATEGORIES: &str = "categories";
+const SETTING_SEARCH_HISTORY: &str = "search_history";
 
 fn flag(game: &Game<'_>, key: &str) -> bool {
     game.native_setting(model::ID, key).as_deref() == Some("true")
@@ -937,5 +947,36 @@ pub(super) fn show_window(game: &mut Game<'_>, offset: usize, len: usize) {
     .unwrap_or_default();
     for update in updates {
         publish(game, update);
+    }
+}
+
+/// Up and Down in the search field recall earlier searches; Enter keeps the current
+/// one. True when the key was used.
+pub(super) fn search_key(game: &mut Game<'_>, key: &str) -> bool {
+    if !game.native_on(model::ID) || !game.mod_browser_typing() {
+        return false;
+    }
+    let older = match key {
+        "key.keyboard.up" => true,
+        "key.keyboard.down" => false,
+        "key.keyboard.enter" | "key.keyboard.keypad.enter" => {
+            save_search_history(game, |browser| browser.remember_search());
+            return false;
+        }
+        _ => return false,
+    };
+    let Some(recalled) = with_browser(|browser| browser.recall_search(older)) else {
+        return false;
+    };
+    game.aei_set_search(recalled.as_deref().unwrap_or(""));
+    true
+}
+
+/// Runs `change` on the history and saves it when it changed.
+fn save_search_history(game: &mut Game<'_>, change: impl FnOnce(&mut model::Browser) -> bool) {
+    if let Some(text) =
+        with_browser(|browser| change(browser).then(|| browser.search_history_text())).flatten()
+    {
+        game.native_set_setting(model::ID, SETTING_SEARCH_HISTORY, &text);
     }
 }

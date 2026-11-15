@@ -11,6 +11,7 @@ mod history;
 mod listing;
 mod recipes;
 mod search;
+mod search_history;
 
 /// State for one open world. Visible lists and action indexes are derived from
 /// this state, so interaction indexes stay aligned with what the panel draws.
@@ -31,6 +32,9 @@ pub struct Browser {
     filtered_items: Vec<usize>,
     query: String,
     search: SearchQuery,
+    /// Earlier searches, oldest first, and the one Up/Down recalled last.
+    search_history: Vec<String>,
+    history_cursor: Option<usize>,
     search_modes: SearchModes,
     bookmarks: Vec<crate::Bookmark>,
     /// Catalogue indexes in display order.
@@ -321,6 +325,8 @@ impl Browser {
                 let Some(&entry) = self.filtered_items.get(index) else {
                     return Vec::new();
                 };
+                // A search that led somewhere is worth recalling.
+                self.remember_search();
                 let stack = self.catalogue[entry].stack.clone();
                 if give {
                     return vec![Self::give(stack, right)];

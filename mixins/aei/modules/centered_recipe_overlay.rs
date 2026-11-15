@@ -1317,6 +1317,16 @@ impl Game<'_> {
         true
     }
 
+    /// Puts `text` in AEI's search field and searches it, as typing would.
+    pub(in crate::game) fn aei_set_search(&mut self, text: &str) {
+        let Some(search) = self.panel.search.as_mut() else {
+            return;
+        };
+        search.set_value(text);
+        search.reset_blink();
+        self.browser_searched();
+    }
+
     /// The pointer is over AEI's item or bookmark list, whose clicks AEI takes: their
     /// release must not reach the container (it would drop a carried stack).
     pub(in crate::game) fn aei_over_panels(&mut self) -> bool {
