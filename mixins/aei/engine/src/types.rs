@@ -13,6 +13,8 @@ pub enum RecipeKind {
     Fuel,
     /// A compostable item: `experience` holds its chance (0 to 1) to add a layer.
     Compost,
+    /// An anvil combination (repair or enchanted book): `ticks` holds its level cost.
+    Anvil,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,10 +29,11 @@ pub(crate) enum Station {
     Brewing,
     Fuel,
     Compost,
+    Anvil,
 }
 
 impl Station {
-    pub(crate) const ALL: [Self; 10] = [
+    pub(crate) const ALL: [Self; 11] = [
         Self::Crafting,
         Self::Smelting,
         Self::Blasting,
@@ -38,6 +41,7 @@ impl Station {
         Self::Campfire,
         Self::Stonecutting,
         Self::Smithing,
+        Self::Anvil,
         Self::Brewing,
         Self::Fuel,
         Self::Compost,
@@ -55,6 +59,7 @@ impl Station {
             RecipeKind::Brewing => Self::Brewing,
             RecipeKind::Fuel => Self::Fuel,
             RecipeKind::Compost => Self::Compost,
+            RecipeKind::Anvil => Self::Anvil,
         }
     }
 
@@ -70,6 +75,7 @@ impl Station {
             Self::Brewing => "minecraft:brewing_stand",
             Self::Fuel => "minecraft:coal",
             Self::Compost => "minecraft:composter",
+            Self::Anvil => "minecraft:anvil",
         }
     }
 }

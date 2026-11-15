@@ -61,6 +61,15 @@ pub(crate) fn fuel_note(ticks: u32) -> String {
     )
 }
 
+/// An anvil combination's note, as the anvil words its level cost.
+pub(crate) fn anvil_note(cost: u32) -> String {
+    if cost >= 40 {
+        "Too Expensive!".into()
+    } else {
+        format!("Enchantment Cost: {cost}")
+    }
+}
+
 /// A compostable item's note: its chance to add a layer.
 pub(crate) fn compost_note(chance: f32) -> String {
     format!(
@@ -207,6 +216,7 @@ impl Browser {
             RecipeKind::Fuel => (Layout::Single, 1, 1, fuel_note(recipe.ticks)),
             RecipeKind::Compost => (Layout::Single, 1, 1, compost_note(recipe.experience)),
             RecipeKind::Smithing => (Layout::Smithing, 3, 1, String::new()),
+            RecipeKind::Anvil => (Layout::Smithing, 2, 1, anvil_note(recipe.ticks)),
             RecipeKind::Brewing => (Layout::Brewing, 2, 1, String::new()),
         };
         let place_enabled = (recipe.book_id >= 0).then(|| known.contains(&recipe.book_id));

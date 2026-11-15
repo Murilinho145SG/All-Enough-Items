@@ -74,7 +74,8 @@ vanilla GUI sprites and the JEI-style sprites Horizon already ships; no JEI
 implementation or assets are included. Full JEI feature parity is not claimed: the pinned native contract
 provides crafting, cooking, stonecutting, smithing and brewing; AEI adds JEI's
 fuel and compostable categories from the items' own `fuel` and `compostable`
-components, but not dynamic anvil or grindstone categories. AEI extends Horizon's creative
+components, and the anvil category (repairs and enchanted books) from the
+anvil's own rules. AEI extends Horizon's creative
 inventory panel guard for its own recipe viewer and leaves the vanilla recipe
 book panel available. The viewer works from any inventory screen Horizon opens;
 each query/category shows at most 256 recipes, matching the native API limit.

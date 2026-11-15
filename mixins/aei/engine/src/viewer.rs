@@ -49,6 +49,8 @@ pub enum Category {
     Fuel,
     /// JEI's compostable category: the item and its chance.
     Compost,
+    /// JEI's anvil category: two inputs, the result and the level cost under them.
+    Anvil,
 }
 
 impl Category {
@@ -65,6 +67,7 @@ impl Category {
                 "minecraft:composter" => Self::Compost,
                 _ => Self::Stonecutting,
             },
+            Layout::Smithing if station == "minecraft:anvil" => Self::Anvil,
             Layout::Smithing => Self::Smithing,
             Layout::Brewing => Self::Brewing,
         }
@@ -81,6 +84,7 @@ impl Category {
             Self::Brewing => (114.0, 61.0),
             Self::Fuel => (98.0, 34.0),
             Self::Compost => (98.0, 24.0),
+            Self::Anvil => (125.0, 38.0),
         }
     }
 
@@ -198,6 +202,13 @@ impl Card {
                 bottom_note = [ox + 22.0, oy + 20.0, cw - 22.0, 10.0];
                 // No arrow and no result: the text says what the fuel does.
                 ([ox, oy, 0.0, 0.0], [ox, oy, 0.0, 0.0])
+            }
+            Category::Anvil => {
+                for (i, x) in [0.0, 49.0].into_iter().enumerate().take(inputs) {
+                    slots.push((i, at(x, 2.0, SLOT)));
+                }
+                bottom_note = [ox, oy + 26.0, cw, 10.0];
+                ([ox + 75.0, oy + 3.0, 22.0, 16.0], at(103.0, 2.0, SLOT))
             }
             Category::Compost => {
                 if inputs > 0 {
@@ -395,6 +406,11 @@ pub fn catalysts(station: &str) -> &'static [&'static str] {
             "minecraft:smoker",
         ],
         "minecraft:composter" => &["minecraft:composter"],
+        "minecraft:anvil" => &[
+            "minecraft:anvil",
+            "minecraft:chipped_anvil",
+            "minecraft:damaged_anvil",
+        ],
         _ => &[],
     }
 }
@@ -581,6 +597,19 @@ mod tests {
         let compost = Card::new(Category::Compost, 1, 1, 1, 0.0, 0.0);
         assert!(compost.flame.is_none() && compost.bottom_note[2] > 0.0);
         assert_eq!(catalysts("minecraft:coal").len(), 3);
+    }
+
+    #[test]
+    fn anvil_cards_hold_two_inputs_an_arrow_and_the_cost_line() {
+        let anvil = Category::of(Layout::Smithing, "minecraft:anvil");
+        assert_eq!(anvil, Category::Anvil);
+        let card = Card::new(anvil, 2, 1, 2, 0.0, 0.0);
+        assert_eq!(card.slots.len(), 3);
+        assert!(card.arrow[2] > 0.0 && card.bottom_note[1] > card.slots[0].1[1]);
+        assert_eq!(
+            Category::of(Layout::Smithing, "minecraft:smithing_table"),
+            Category::Smithing
+        );
     }
 
     #[test]

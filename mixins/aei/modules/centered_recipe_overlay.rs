@@ -304,6 +304,7 @@ fn category_title(game: &Game<'_>, station: &str) -> String {
         "minecraft:smithing_table" => "Smithing".into(),
         "minecraft:coal" => "Fuel".into(),
         "minecraft:composter" => "Compostable".into(),
+        "minecraft:anvil" => "Anvil".into(),
         _ => "Brewing".into(),
     }
 }
@@ -510,7 +511,24 @@ fn draw_recipes(
             NativeRecipeLayout::Brewing => draw_brewing(game, batch, card),
             // Fuel and compostables: no arrow, their note says what they do.
             _ if card.arrow[2] == 0.0 => draw_note_card(game, batch, card, &recipe.note),
-            _ => paint::arrow(game, batch, card.arrow),
+            _ => {
+                paint::arrow(game, batch, card.arrow);
+                // The anvil's level cost under its inputs (green, red when too expensive).
+                if recipe.layout != NativeRecipeLayout::Grid
+                    && !recipe.note.is_empty()
+                    && card.bottom_note[2] > 0.0
+                {
+                    let color = if recipe.note.starts_with("Too") {
+                        rgba(255, 96, 96, 255)
+                    } else {
+                        rgba(128, 255, 32, 255)
+                    };
+                    let [x, y, w, _] = card.bottom_note;
+                    let font = &game.gui.atlas.font;
+                    let tx = (x + (w - font.width(&recipe.note)) / 2.0).round();
+                    batch.text(&game.gui.atlas, &recipe.note, tx, y, color, true);
+                }
+            }
         }
         if recipe.note == SHAPELESS_NOTE {
             paint::shapeless(game, batch, card.shapeless);

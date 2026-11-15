@@ -172,6 +172,109 @@ fn fuels_and_compostables(game: &Game<'_>, items: &[NativeItem]) -> Vec<model::R
     fuels
 }
 
+/// JEI's anvil category, worked out by the anvil's own rules (`stations::anvil_result`):
+/// each damageable item repaired with its material and with a second damaged copy, then
+/// every item an enchantment applies to combined with that enchantment's highest-level
+/// book from the creative tabs. The cost is the anvil's level cost.
+fn anvil_recipes(game: &Game<'_>, items: &[NativeItem]) -> Vec<model::Recipe> {
+    use horizon_client::items::ItemStack;
+    let registry = game.items();
+    let enchantments = game.enchantments();
+    let index: std::collections::HashMap<&str, usize> = items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| (item.id.as_str(), i))
+        .collect();
+    let ingredient = |stack: &ItemStack| {
+        Some(model::Ingredient {
+            item: *index.get(&*stack.item)?,
+            count: stack.count,
+            components: super::native_recipes::components(stack),
+        })
+    };
+    let mut recipes = Vec::new();
+    let mut combine = |left: &ItemStack, right: &[ItemStack]| {
+        let first = right.first()?;
+        let result = horizon_client::stations::anvil_result(
+            enchantments,
+            registry,
+            Some(left),
+            Some(first),
+            None,
+            "",
+            false,
+        );
+        let output = result.result?;
+        if result.cost <= 0 {
+            return None;
+        }
+        let rights: Vec<_> = right.iter().filter_map(ingredient).collect();
+        recipes.push(model::Recipe {
+            id: format!("aei:anvil/{}", recipes.len()),
+            kind: model::RecipeKind::Anvil,
+            width: 2,
+            height: 1,
+            inputs: vec![vec![ingredient(left)?], rights],
+            outputs: vec![ingredient(&output)?],
+            ticks: result.cost as u32,
+            experience: 0.0,
+            book_id: -1,
+        });
+        Some(())
+    };
+
+    for native in items {
+        let Some(info) = registry.get(&native.id).filter(|info| info.max_damage > 0) else {
+            continue;
+        };
+        let mut damaged = ItemStack::new(native.id.as_str(), 1);
+        damaged.damage = info.max_damage * 3 / 4;
+        if let Some(props) = enchantments
+            .props(&native.id)
+            .filter(|props| !props.repairable.is_empty())
+        {
+            let materials: Vec<ItemStack> = items
+                .iter()
+                .filter(|m| {
+                    horizon_client::enchant::Enchantments::item_in(
+                        registry,
+                        &props.repairable,
+                        &m.id,
+                    )
+                })
+                .map(|m| ItemStack::new(m.id.as_str(), 1))
+                .collect();
+            combine(&damaged, &materials);
+        }
+        combine(&damaged, std::slice::from_ref(&damaged));
+    }
+
+    // The highest level of each enchantment's book, as the creative tabs list them.
+    let mut books: Vec<(std::sync::Arc<str>, u32, ItemStack)> = Vec::new();
+    for stack in game.creative_screen.search_items() {
+        if &*stack.item != "minecraft:enchanted_book" {
+            continue;
+        }
+        let [(id, level)] = stack.stored_enchantments() else {
+            continue;
+        };
+        match books.iter_mut().find(|(known, _, _)| known == id) {
+            Some(entry) if entry.1 < *level => *entry = (id.clone(), *level, stack.clone()),
+            Some(_) => {}
+            None => books.push((id.clone(), *level, stack.clone())),
+        }
+    }
+    for (enchantment, _, book) in &books {
+        for native in items {
+            if enchantments.can_enchant(registry, enchantment, &native.id) {
+                let item = ItemStack::new(native.id.as_str(), 1);
+                combine(&item, std::slice::from_ref(book));
+            }
+        }
+    }
+    recipes
+}
+
 /// The chance a compostable item's `layers` provider adds a layer to a composter that
 /// isn't empty (an empty one always takes it): a plain number, vanilla's named
 /// providers, or a weighted list of 0 and 1 layers.
@@ -367,6 +470,7 @@ pub(super) fn frame(game: &mut Game<'_>) {
         {
             let mut recipes: Vec<model::Recipe> = tables.recipes.iter().map(recipe).collect();
             recipes.extend(fuels_and_compostables(game, &tables.items));
+            recipes.extend(anvil_recipes(game, &tables.items));
             let (mut browser, _) =
                 model::Browser::new(tables.items.iter().map(item).collect(), recipes);
             browser.handle(model::Event::SetSearchModes(search_modes(game)), false, &[]);
