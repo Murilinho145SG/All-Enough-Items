@@ -5,6 +5,9 @@ use crate::{
 use search::{Indexed, SearchQuery};
 use std::collections::HashMap;
 
+/// Recently looked-up items kept.
+pub const RECENT: usize = 9;
+
 mod bookmarks;
 mod categories;
 mod history;
@@ -32,6 +35,8 @@ pub struct Browser {
     filtered_items: Vec<usize>,
     query: String,
     search: SearchQuery,
+    /// The items looked up last, newest first.
+    recent: Vec<Stack>,
     /// Earlier searches, oldest first, and the one Up/Down recalled last.
     search_history: Vec<String>,
     history_cursor: Option<usize>,
@@ -207,6 +212,7 @@ impl Browser {
         if self.page_recipe_ids(&candidate).is_empty() {
             return None;
         }
+        self.remember_recent(&candidate.item);
         self.history.push(candidate);
         Some(self.render_page(known))
     }
@@ -218,6 +224,44 @@ impl Browser {
             stack,
             count: if right { 1 } else { 64 },
         }
+    }
+
+    /// Items looked up last, newest first ([`RECENT`] at most).
+    pub fn recent(&self) -> &[Stack] {
+        &self.recent
+    }
+
+    /// Replaces the recent items with saved `text` (one `id<TAB>components` per line).
+    pub fn load_recent(&mut self, text: &str) {
+        self.recent = text
+            .lines()
+            .filter_map(|line| {
+                let (id, components) = line.split_once('\t').unwrap_or((line, ""));
+                id.contains(':').then(|| Stack {
+                    id: id.to_owned(),
+                    count: 1,
+                    components: components.to_owned(),
+                })
+            })
+            .take(RECENT)
+            .collect();
+    }
+
+    pub fn recent_text(&self) -> String {
+        self.recent
+            .iter()
+            .map(|s| format!("{}\t{}\n", s.id, s.components))
+            .collect()
+    }
+
+    fn remember_recent(&mut self, stack: &Stack) {
+        let stack = Stack {
+            count: 1,
+            ..stack.clone()
+        };
+        self.recent.retain(|s| *s != stack);
+        self.recent.insert(0, stack);
+        self.recent.truncate(RECENT);
     }
 
     fn push_lookup(&mut self, lookup: Lookup, known: &[i32]) -> Vec<Update> {
@@ -1143,6 +1187,24 @@ mod tests {
         // Forward still reaches the later lookups.
         let next = browser.handle(Event::Forward, false, &[]);
         assert!(matches!(&next[0], Update::RecipeList(p) if p.title == "Uses: Oak Planks"));
+    }
+
+    #[test]
+    fn recent_items_keep_the_last_lookups_newest_first() {
+        let (items, recipes) = fixture();
+        let (mut browser, _) = Browser::new(items, recipes);
+        for (index, right) in [(0, true), (1, true), (0, true), (2, false)] {
+            browser.handle(Event::ClickItem { index, right }, false, &[]);
+        }
+        let ids: Vec<_> = browser.recent().iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            [
+                "minecraft:stick",
+                "minecraft:oak_log",
+                "minecraft:oak_planks"
+            ]
+        );
     }
 
     #[test]

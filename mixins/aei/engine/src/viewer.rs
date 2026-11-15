@@ -544,6 +544,20 @@ impl Viewer {
     }
 }
 
+/// The recently looked-up items: one row along the bottom of the space left of the
+/// GUI (an option). None when fewer than three cells fit.
+pub fn recent_row(screen: [f32; 2], gui_left: f32, count: usize) -> Vec<Rect> {
+    let [_, sh] = screen;
+    let columns = (((gui_left - 2.0 * PADDING) / SLOT).floor().max(0.0) as usize).min(count);
+    if columns < 3.min(count) || count == 0 {
+        return Vec::new();
+    }
+    let y = sh - PADDING - SLOT;
+    (0..columns)
+        .map(|i| [PADDING + i as f32 * SLOT, y, SLOT, SLOT])
+        .collect()
+}
+
 /// The bookmark list left of a screen, as JEI shows it: a page bar over a grid, aligned
 /// to the screen's left edge.
 #[derive(Clone, Debug, PartialEq)]
@@ -561,11 +575,16 @@ impl BookmarkList {
     /// None without bookmarks, or when fewer than three columns (room for the page
     /// buttons) fit.
     pub fn new(screen: [f32; 2], gui_left: f32, items: usize) -> Option<Self> {
+        Self::above(screen, gui_left, items, 0.0)
+    }
+
+    /// [`BookmarkList::new`] leaving `reserved` pixels free at the bottom (the recent row).
+    pub fn above(screen: [f32; 2], gui_left: f32, items: usize, reserved: f32) -> Option<Self> {
         let [_, sh] = screen;
         let gui_left = gui_left.max(0.0);
         let available_w = gui_left - 2.0 * PADDING;
         let top = PADDING + BAR + 2.0;
-        let available_h = sh - top - PADDING;
+        let available_h = sh - top - PADDING - reserved;
         let columns = ((available_w / SLOT).floor().max(0.0) as usize).min(MAX_ITEM_COLUMNS);
         let mut rows = ((available_h / SLOT).floor().max(0.0) as usize).min(MAX_ITEM_ROWS);
         if items == 0 || columns < 3 || rows < 1 {
@@ -647,6 +666,17 @@ mod tests {
             view.area[0] + view.area[2] - (last[0] + last[2])
         );
         assert!(view.trail(0).is_empty());
+    }
+
+    #[test]
+    fn the_recent_row_runs_along_the_bottom_left() {
+        let row = recent_row([480.0, 270.0], 160.0, 9);
+        assert_eq!(row.len(), 8);
+        assert_eq!(row[0][1] + row[0][3], 270.0 - 6.0);
+        assert!(recent_row([480.0, 270.0], 40.0, 9).is_empty());
+        let list = BookmarkList::above([480.0, 270.0], 160.0, 1000, 20.0).unwrap();
+        let last = list.slot(list.per_page() - 1);
+        assert!(last[1] + last[3] <= row[0][1]);
     }
 
     #[test]

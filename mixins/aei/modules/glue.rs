@@ -16,6 +16,7 @@ struct Session {
 static HIDDEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static MOD_NAMES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CHEAT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static RECENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CENTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static COLUMNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(9);
 
@@ -42,6 +43,7 @@ pub(super) fn bookmark_event(game: &mut Game<'_>, event: model::Event) {
     let known = game.native_known_recipes();
     let give = flag(game, SETTING_GIVE);
     let updates = with_browser(|browser| browser.handle(event, give, &known)).unwrap_or_default();
+    save_recent(game);
     for update in updates {
         if matches!(&update, model::Update::RecipeList(_)) {
             game.aei_reset_viewer();
@@ -510,6 +512,10 @@ pub(super) fn frame(game: &mut Game<'_>) {
                 .native_setting(model::ID, SETTING_SEARCH_HISTORY)
                 .unwrap_or_default();
             browser.load_search_history(&history);
+            let recent = game
+                .native_setting(model::ID, SETTING_RECENT_ITEMS)
+                .unwrap_or_default();
+            browser.load_recent(&recent);
             // JEI's editable category order: written once with every category, then read.
             match game.native_setting(model::ID, SETTING_CATEGORIES) {
                 Some(text) => browser.load_categories(&text),
@@ -637,6 +643,7 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
     if let Some(text) = after.filter(|text| Some(text) != before.as_ref()) {
         game.native_set_setting(model::ID, SETTING_SEARCH_HISTORY, &text);
     }
+    save_recent(game);
     for update in updates {
         if matches!(&update, model::Update::RecipeList(_)) {
             game.aei_reset_viewer();
@@ -708,6 +715,8 @@ const SETTING_SORT: &str = "sort";
 const SETTING_HIDDEN_ITEMS: &str = "hidden_items";
 const SETTING_CATEGORIES: &str = "categories";
 const SETTING_SEARCH_HISTORY: &str = "search_history";
+const SETTING_RECENT: &str = "recent";
+const SETTING_RECENT_ITEMS: &str = "recent_items";
 
 fn flag(game: &Game<'_>, key: &str) -> bool {
     game.native_setting(model::ID, key).as_deref() == Some("true")
@@ -718,6 +727,7 @@ fn load_flags(game: &Game<'_>) {
     HIDDEN.store(flag(game, SETTING_HIDDEN), Relaxed);
     MOD_NAMES.store(flag(game, SETTING_MOD_NAMES), Relaxed);
     CHEAT.store(flag(game, SETTING_GIVE), Relaxed);
+    RECENT.store(flag(game, SETTING_RECENT), Relaxed);
     CENTERED.store(flag(game, SETTING_CENTERED), Relaxed);
     COLUMNS.store(columns(game), Relaxed);
 }
@@ -818,6 +828,7 @@ fn settings() -> Vec<Setting> {
         Setting::Sort,
         Setting::Columns,
         Setting::Flag(SETTING_CENTERED, "Search bar under the screen"),
+        Setting::Flag(SETTING_RECENT, "Recently viewed items row"),
         Setting::Flag(SETTING_MOD_NAMES, "Mod name in tooltips"),
         Setting::Flag(SETTING_CURSOR, "Cheat items in Creative go to the cursor"),
     ];
@@ -1023,4 +1034,28 @@ fn copy_stack(game: &mut Game<'_>, target: &NativeStack, give: bool) {
     };
     game.clipboard.set(&text);
     game.message = Some((format!("Copied {text}"), std::time::Instant::now()));
+}
+
+/// Whether the recently-viewed row is on (a setting, off by default).
+pub(super) fn recent_enabled() -> bool {
+    RECENT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The recently looked-up items, newest first.
+pub(super) fn recent() -> Vec<NativeStack> {
+    with_browser(|browser| browser.recent().iter().map(native).collect()).unwrap_or_default()
+}
+
+/// Saves the recent items when they changed.
+fn save_recent(game: &mut Game<'_>) {
+    std::thread_local! {
+        static SAVED: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+    }
+    let Some(text) = with_browser(|browser| browser.recent_text()) else {
+        return;
+    };
+    if SAVED.with(|saved| *saved.borrow() != text) {
+        game.native_set_setting(model::ID, SETTING_RECENT_ITEMS, &text);
+        SAVED.with(|saved| *saved.borrow_mut() = text);
+    }
 }

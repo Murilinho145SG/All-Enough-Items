@@ -45,6 +45,8 @@ struct Screen {
     view: Option<Viewer>,
     items: Option<(Sidebar, Layout)>,
     bookmarks: Option<BookmarkList>,
+    /// The recently viewed row (an option), stack and cell each.
+    recent: Vec<(BrowserStack, viewer::Rect)>,
 }
 
 /// AEI's panel is up on a container screen.
@@ -154,12 +156,30 @@ fn screen(game: &Game<'_>, batch: &HudBatch, recipes: bool) -> Option<Screen> {
         };
         (items, layout)
     });
-    let bookmarks = BookmarkList::new(size, left, crate::game::aei_glue::bookmark_count());
+    let recent_stacks = if crate::game::aei_glue::recent_enabled() {
+        crate::game::aei_glue::recent()
+    } else {
+        Vec::new()
+    };
+    let cells = viewer::recent_row(size, left, recent_stacks.len());
+    let reserved = if cells.is_empty() {
+        0.0
+    } else {
+        viewer::SLOT + 4.0
+    };
+    let recent: Vec<_> = recent_stacks.into_iter().zip(cells).collect();
+    let bookmarks = BookmarkList::above(
+        size,
+        left,
+        crate::game::aei_glue::bookmark_count(),
+        reserved,
+    );
     // Without a recipe window, AEI only takes over when its list fits.
     (view.is_some() || items.is_some()).then_some(Screen {
         view,
         items,
         bookmarks,
+        recent,
     })
 }
 
@@ -817,6 +837,10 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
     if let Some(list) = &screen.bookmarks {
         draw_bookmarks(game, batch, list);
     }
+    for (i, (stack, rect)) in screen.recent.iter().enumerate() {
+        paint::slot(game, batch, *rect);
+        draw_stack(game, batch, stack, *rect, &format!("Recent {i}"), true);
+    }
 
     let cursor = game.cursor;
     // A category tab names its category; every other icon shows its item.
@@ -862,6 +886,13 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         .or_else(|| {
             let list = screen.bookmarks.as_ref()?;
             hovered_bookmark(game, list).map(|(_, stack)| stack)
+        })
+        .or_else(|| {
+            screen
+                .recent
+                .iter()
+                .find(|(_, rect)| viewer::contains(*rect, cursor))
+                .map(|(stack, _)| stack.clone())
         });
     let bookmark_tip = screen.view.as_ref().and_then(|view| {
         let (card, _) = view.cards.iter().find(|(i, card)| {
@@ -1180,6 +1211,14 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
         press_items(game, &owner, items, layout, right);
         return ControlFlow::Break(true);
     }
+    if let Some((stack, _)) = screen
+        .recent
+        .iter()
+        .find(|(_, rect)| viewer::contains(*rect, game.cursor))
+    {
+        crate::game::aei_glue::lookup(game, stack, right);
+        return ControlFlow::Break(true);
+    }
     if let Some(list) = &screen.bookmarks
         && inside(game.cursor, list.area)
     {
@@ -1234,6 +1273,13 @@ pub(super) fn pointed(game: &mut Game<'_>) -> ControlFlow<Option<BrowserStack>> 
         && let Some((_, stack)) = hovered_bookmark(game, list)
     {
         return ControlFlow::Break(Some(stack));
+    }
+    if let Some((stack, _)) = screen
+        .recent
+        .iter()
+        .find(|(_, rect)| viewer::contains(*rect, game.cursor))
+    {
+        return ControlFlow::Break(Some(stack.clone()));
     }
     match &screen.view {
         Some(view) => ControlFlow::Break(
@@ -1400,16 +1446,20 @@ impl Game<'_> {
             inside(cursor, items.area)
                 || inside(cursor, items.search)
                 || inside(cursor, items.settings)
-        }) || screen.bookmarks.as_ref().is_some_and(|list| {
-            list.arrows()
-                .iter()
-                .chain(
-                    &(0..list.per_page())
-                        .map(|o| list.slot(o))
-                        .collect::<Vec<_>>(),
-                )
-                .any(|rect| viewer::contains(*rect, cursor))
-        })
+        }) || screen
+            .recent
+            .iter()
+            .any(|(_, rect)| viewer::contains(*rect, cursor))
+            || screen.bookmarks.as_ref().is_some_and(|list| {
+                list.arrows()
+                    .iter()
+                    .chain(
+                        &(0..list.per_page())
+                            .map(|o| list.slot(o))
+                            .collect::<Vec<_>>(),
+                    )
+                    .any(|rect| viewer::contains(*rect, cursor))
+            })
     }
 
     /// Cheat mode on the creative screen: `stack` on the cursor, as picking it from a

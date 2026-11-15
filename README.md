@@ -43,6 +43,8 @@ through Horizon's native mod system.
 - Click ingredients to follow recipes, click the category title to browse every
   recipe (one tab per category), and use **Left/Right** (or **Backspace** to go
   back) to navigate lookup history.
+- An optional row at the bottom left holds the nine items looked up last (off by
+  default; saved per instance).
 - Beyond JEI, the last ten lookups line up above the category tabs as a
   breadcrumb trail (the shown one framed in gold): click one to go back to it.
 - Ingredients with alternatives cycle every second; hold **Shift** to pause them.
