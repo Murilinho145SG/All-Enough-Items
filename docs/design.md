@@ -62,6 +62,21 @@ are in `browser/search.rs`, recipe indexing and presentation in
 - History is a single navigation stack: Back returns to the catalogue and
   Forward can reopen the first lookup.
 
+## Catalogue and search
+
+The item list is built once per recipe table from the creative screen's search
+tab (`glue::catalogue`): its stacks in tab order, variants with their
+components, each with the tooltip the player would see and the titles of the
+tabs that list it. Registry items no tab lists follow. The engine indexes each
+entry's lower-cased fields once, so a search only compares strings.
+
+Search modes and flags (cheat clicks, hidden overlay, mod names in tooltips)
+are Horizon native settings, one file per key. Flags read on every frame or
+tooltip are cached in atomics and reloaded when the settings page changes them.
+A list published outside a search goes through `aei_show_search_result`, so an
+empty result keeps the panel and its field; if the panel is ever dropped anyway,
+the next frame republishes the full list.
+
 ## Recipe-table lifecycle
 
 `glue.rs` tracks the identity of Horizon's recipe table and the set of known

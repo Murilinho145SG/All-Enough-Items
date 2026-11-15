@@ -866,6 +866,20 @@ impl Game<'_> {
         true
     }
 
+    /// Shows a new item list for the current query as a search reply: an empty result
+    /// keeps the panel and its field, so the player can still edit the query.
+    pub(in crate::game) fn aei_show_search_result(&mut self, items: Vec<BrowserStack>) {
+        self.panel.searching = true;
+        self.native_panel_items(crate::game::aei::ID, items);
+        self.panel.searching = false;
+    }
+
+    /// No panel is shown although AEI has a session (Horizon drops a panel that shows
+    /// nothing outside a search).
+    pub(in crate::game) fn aei_panel_missing(&self) -> bool {
+        self.panel_shown().is_none()
+    }
+
     pub(in crate::game) fn aei_reset_catalogue(&mut self) {
         self.aei_reset_viewer();
         self.panel.search = None;

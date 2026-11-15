@@ -1,5 +1,13 @@
 fn aei_history_key(game: &mut crate::game::Game<'_>, key: &str) -> std::ops::ControlFlow<()> {
     if game.title.is_none()
+        && key == "key.keyboard.o"
+        && game.has_control_down()
+        && !game.mod_browser_typing()
+    {
+        crate::game::aei_glue::toggle_overlay(game);
+        return std::ops::ControlFlow::Break(());
+    }
+    if game.title.is_none()
         && key == "key.keyboard.f"
         && game.has_control_down()
         && game.aei_focus_search()

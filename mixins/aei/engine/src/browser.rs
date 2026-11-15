@@ -1,8 +1,9 @@
 use crate::{
-    Event, Ingredient, ItemInfo, Layout, Lookup, RECIPE_LIMIT, Recipe, RecipeCard, RecipeKind,
-    RecipePage, STACK_LIMIT, Stack, Station, Update,
+    Entry, Event, Ingredient, ItemInfo, Layout, Lookup, RECIPE_LIMIT, Recipe, RecipeCard,
+    RecipeKind, RecipePage, STACK_LIMIT, SearchModes, Stack, Station, Update,
 };
-use search::SearchQuery;
+use search::{Indexed, SearchQuery};
+use std::collections::HashMap;
 
 mod history;
 mod recipes;
@@ -12,11 +13,20 @@ mod search;
 /// this state, so interaction indexes stay aligned with what the panel draws.
 #[derive(Default)]
 pub struct Browser {
+    /// The item registry, which recipe ingredients index.
     items: Vec<ItemInfo>,
+    /// Registry index by item id.
+    by_id: HashMap<String, usize>,
     recipes: Vec<Recipe>,
     recipe_index: recipes::RecipeIndex,
+    /// The item list: every entry the search can show, in display order.
+    catalogue: Vec<Entry>,
+    indexed: Vec<Indexed>,
+    /// Catalogue indexes of the entries the search shows.
     filtered_items: Vec<usize>,
+    query: String,
     search: SearchQuery,
+    search_modes: SearchModes,
     history: history::History,
     shown_recipe_ids: Vec<usize>,
 }
@@ -24,14 +34,63 @@ pub struct Browser {
 impl Browser {
     pub fn new(items: Vec<ItemInfo>, recipes: Vec<Recipe>) -> (Self, Update) {
         let recipe_index = recipes::RecipeIndex::new(&recipes);
+        let by_id = items
+            .iter()
+            .enumerate()
+            .map(|(index, item)| (item.id.clone(), index))
+            .collect();
         let mut browser = Self {
             items,
+            by_id,
             recipes,
             recipe_index,
             ..Self::default()
         };
+        browser.set_entries(Vec::new());
         let update = browser.item_list();
         (browser, update)
+    }
+
+    /// Shows `entries` (the creative tabs' stacks, variants included) as the item list, in
+    /// their order, then every registry item none of them is. Entries of unknown items
+    /// are left out.
+    pub fn set_catalogue(&mut self, entries: Vec<Entry>) -> Update {
+        self.set_entries(entries);
+        self.item_list()
+    }
+
+    fn set_entries(&mut self, entries: Vec<Entry>) {
+        let mut seen = std::collections::HashSet::new();
+        let mut catalogue: Vec<Entry> = entries
+            .into_iter()
+            .filter(|entry| self.by_id.contains_key(&entry.stack.id))
+            .filter(|entry| seen.insert((entry.stack.id.clone(), entry.stack.components.clone())))
+            .collect();
+        let listed: std::collections::HashSet<String> =
+            catalogue.iter().map(|e| e.stack.id.clone()).collect();
+        catalogue.extend(
+            self.items
+                .iter()
+                .filter(|item| item.id != "minecraft:air" && !listed.contains(&item.id))
+                .map(|item| Entry {
+                    stack: Stack {
+                        id: item.id.clone(),
+                        count: 1,
+                        components: String::new(),
+                    },
+                    name: item.name.clone(),
+                    tooltip: Vec::new(),
+                    tabs: Vec::new(),
+                }),
+        );
+        self.indexed = catalogue
+            .iter()
+            .map(|entry| {
+                let item = self.by_id.get(&entry.stack.id).map(|&i| &self.items[i]);
+                Indexed::new(entry, item)
+            })
+            .collect();
+        self.catalogue = catalogue;
     }
 
     fn render_page(&mut self, known: &[i32]) -> Update {
@@ -139,31 +198,30 @@ impl Browser {
     pub fn handle(&mut self, event: Event, give: bool, known: &[i32]) -> Vec<Update> {
         match event {
             Event::Search(query) => {
-                self.search = SearchQuery::parse(&query);
+                self.search = SearchQuery::parse(&query, &self.search_modes);
+                self.query = query;
+                vec![self.item_list()]
+            }
+            Event::SetSearchModes(modes) => {
+                if modes == self.search_modes {
+                    return Vec::new();
+                }
+                self.search_modes = modes;
+                self.search = SearchQuery::parse(&self.query, &modes);
                 vec![self.item_list()]
             }
             Event::ClickItem { index, right } => {
-                let Some(&item_index) = self.filtered_items.get(index) else {
+                let Some(&entry) = self.filtered_items.get(index) else {
                     return Vec::new();
                 };
-                let id = self.items[item_index].id.clone();
+                let stack = self.catalogue[entry].stack.clone();
                 if give {
                     return vec![Update::Give {
-                        item: id,
+                        item: stack.id,
                         count: if right { 99 } else { 1 },
                     }];
                 }
-                self.open_lookup(
-                    Stack {
-                        id,
-                        count: 1,
-                        components: String::new(),
-                    },
-                    right,
-                    known,
-                )
-                .into_iter()
-                .collect()
+                self.open_lookup(stack, right, known).into_iter().collect()
             }
             Event::Lookup { stack, uses } | Event::ClickRecipeIngredient { stack, right: uses } => {
                 self.open_lookup(stack, uses, known).into_iter().collect()
@@ -292,9 +350,9 @@ mod tests {
         for (query, expected) in [
             ("oak", 2),
             ("@mine stick", 1),
-            ("#logs", 1),
+            ("$logs", 1),
             ("@other", 0),
-            ("@minecraft #logs", 1),
+            ("@minecraft $logs", 1),
             ("&oak_planks", 1),
             ("oak -planks", 1),
             ("\"oak log\"", 1),
@@ -305,6 +363,140 @@ mod tests {
                 matches!(&result[0], Update::ItemList(items) if items.len() == expected),
                 "query {query:?}"
             );
+        }
+    }
+
+    fn entry(id: &str, name: &str, components: &str, tooltip: &[&str], tabs: &[&str]) -> Entry {
+        Entry {
+            stack: Stack {
+                id: id.into(),
+                count: 1,
+                components: components.into(),
+            },
+            name: name.into(),
+            tooltip: tooltip.iter().map(|s| (*s).to_owned()).collect(),
+            tabs: tabs.iter().map(|s| (*s).to_owned()).collect(),
+        }
+    }
+
+    fn shown(update: &[Update]) -> Vec<String> {
+        match update.first() {
+            Some(Update::ItemList(stacks)) => stacks
+                .iter()
+                .map(|s| format!("{}{}", s.id, s.components))
+                .collect(),
+            other => panic!("expected item list, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_catalogue_lists_variants_in_tab_order_then_the_rest_of_the_registry() {
+        let (items, recipes) = fixture();
+        let (mut browser, _) = Browser::new(items, recipes);
+        let update = browser.set_catalogue(vec![
+            entry("minecraft:stick", "Stick", "", &[], &["Ingredients"]),
+            entry(
+                "minecraft:stick",
+                "Stick",
+                "[custom_name='a']",
+                &[],
+                &["Ingredients"],
+            ),
+            entry("minecraft:stick", "Stick", "", &[], &["Ingredients"]),
+            entry("test:unknown", "Unknown", "", &[], &[]),
+            entry(
+                "minecraft:oak_log",
+                "Oak Log",
+                "",
+                &[],
+                &["Building Blocks"],
+            ),
+        ]);
+        let Update::ItemList(stacks) = update else {
+            panic!("expected item list")
+        };
+        let ids: Vec<_> = stacks
+            .iter()
+            .map(|s| format!("{}{}", s.id, s.components))
+            .collect();
+        assert_eq!(
+            ids,
+            [
+                "minecraft:stick",
+                "minecraft:stick[custom_name='a']",
+                "minecraft:oak_log",
+                "minecraft:oak_planks",
+            ]
+        );
+        // Clicking a variant looks up its exact stack.
+        let page = browser.handle(
+            Event::ClickItem {
+                index: 2,
+                right: true,
+            },
+            false,
+            &[],
+        );
+        assert!(matches!(&page[0], Update::RecipeList(page) if page.title == "Uses: Oak Log"));
+    }
+
+    #[test]
+    fn jei_prefixes_search_their_fields_and_follow_their_modes() {
+        let (items, recipes) = fixture();
+        let (mut browser, _) = Browser::new(items, recipes);
+        browser.set_catalogue(vec![
+            entry("minecraft:stick", "Stick", "", &["Handy"], &["Ingredients"]),
+            entry(
+                "minecraft:oak_log",
+                "Oak Log",
+                "",
+                &[],
+                &["Building Blocks"],
+            ),
+        ]);
+        let search =
+            |b: &mut Browser, q: &str| shown(&b.handle(Event::Search(q.into()), false, &[]));
+        assert_eq!(search(&mut browser, "#handy"), ["minecraft:stick"]);
+        // Tooltips are searched by plain words too (JEI's default).
+        assert_eq!(search(&mut browser, "handy"), ["minecraft:stick"]);
+        assert_eq!(search(&mut browser, "%building"), ["minecraft:oak_log"]);
+        assert_eq!(search(&mut browser, "$planks"), ["minecraft:oak_planks"]);
+        assert_eq!(
+            search(&mut browser, "@minecraft -$logs -%ingr"),
+            ["minecraft:oak_planks"]
+        );
+        // Tabs need their prefix by default.
+        assert!(search(&mut browser, "building").is_empty());
+
+        let modes = SearchModes {
+            tab: crate::SearchMode::Enabled,
+            tooltip: crate::SearchMode::Disabled,
+            ..SearchModes::default()
+        };
+        search(&mut browser, "building");
+        let update = browser.handle(Event::SetSearchModes(modes), false, &[]);
+        // The shown query is searched again under the new modes.
+        assert_eq!(shown(&update), ["minecraft:oak_log"]);
+        assert!(search(&mut browser, "handy").is_empty());
+        // A disabled prefix is part of the word: nothing is called "#handy".
+        assert!(search(&mut browser, "#handy").is_empty());
+        assert!(
+            browser
+                .handle(Event::SetSearchModes(modes), false, &[])
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn search_modes_round_trip_through_their_setting_names() {
+        for mode in crate::SearchMode::ALL {
+            assert_eq!(crate::SearchMode::parse(mode.name()), Some(mode));
+            assert_ne!(mode.next(), mode);
+        }
+        let mut modes = SearchModes::default();
+        for field in 0..SearchModes::FIELDS.len() {
+            modes.set(field, crate::SearchMode::Disabled);
+            assert_eq!(modes.get(field), crate::SearchMode::Disabled);
         }
     }
 

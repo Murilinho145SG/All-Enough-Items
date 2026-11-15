@@ -8,6 +8,7 @@ pub const KEY_BACK: [&str; 3] = ["back", "Previous recipe lookup", "key.keyboard
 pub const KEY_FORWARD: [&str; 3] = ["forward", "Next recipe lookup", "key.keyboard.right"];
 
 pub use aei_engine::{
-    Browser, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard, RecipeKind, Stack, Update,
+    Browser, Entry, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard, RecipeKind,
+    SearchMode, SearchModes, Stack, Update,
 };
-pub use aei_engine::{NOTE_SEPARATOR, SHAPELESS_NOTE, viewer};
+pub use aei_engine::{NOTE_SEPARATOR, SHAPELESS_NOTE, mod_name, viewer};

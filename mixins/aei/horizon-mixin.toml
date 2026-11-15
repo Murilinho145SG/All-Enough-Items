@@ -220,3 +220,30 @@ helper = "hooks/modal_mouse_release.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
 ]
+
+# Ctrl+O hides AEI's overlay (JEI's toggle): the panel is not synced while hidden.
+[[injection]]
+id = "hide_overlay"
+kind = "MODIFY_EXPRESSION_VALUE"
+target = "horizon_client::game::native_panel::Game<'_>::browser_sync"
+selector = 'self.title.is_some()'
+require = 1
+ordinal = 0
+helper = "hooks/hide_overlay.rs"
+bindings = [
+  { name = "value", ty = "bool", value = "$value" },
+]
+
+# JEI's mod name line at the end of item tooltips (an AEI setting, off by default).
+[[injection]]
+id = "mod_name_tooltip"
+kind = "MODIFY_EXPRESSION_VALUE"
+target = "horizon_client::game::stations::Game<'_>::draw_stack_tooltip_with"
+selector = 'self.stack_tooltip_lines(stack, false, creative)'
+require = 1
+ordinal = 0
+helper = "hooks/mod_name_tooltip.rs"
+bindings = [
+  { name = "value", ty = "Vec<(horizon_client::text::Text, u32)>", value = "$value" },
+  { name = "stack", ty = "&ItemStack", value = "stack" },
+]

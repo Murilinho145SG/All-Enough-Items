@@ -6,7 +6,7 @@ use crate::Result;
 use serde_json::{Value, json};
 use std::path::Path;
 
-const CHECKS: [&str; 9] = [
+const CHECKS: [&str; 11] = [
     "recipe pages",
     "scroll",
     "categories",
@@ -16,6 +16,8 @@ const CHECKS: [&str; 9] = [
     "clear search",
     "typing",
     "return to catalogue",
+    "prefixed search",
+    "overlay toggle",
 ];
 
 #[cfg(not(unix))]
@@ -96,9 +98,25 @@ pub fn run(socket: &Path, out: &Path) -> Result {
         game.has_items()?,
         "right-click clears the search and typing filters again",
     )?;
+    // JEI's prefixes over the creative catalogue: tooltip lines and item tags.
+    for (query, item) in [
+        ("#sharpness", "minecraft:enchanted_book"),
+        ("$logs", "minecraft:oak_log"),
+    ] {
+        game.send(&format!("click {field} right"))?;
+        game.send(&format!("type {query}"))?;
+        ensure(game.shows(item)?, "a prefixed search finds its item")?;
+    }
     let field = game.field()?;
     game.send(&format!("click {field} right"))?;
     game.send("click-at 1 1")?;
+    // Ctrl+O hides the overlay and shows it again.
+    for shown in [false, true] {
+        game.send("key ctrl down")?;
+        game.send("key o tap")?;
+        game.send("key ctrl up")?;
+        ensure(game.has_items()? == shown, "Ctrl+O toggles the overlay")?;
+    }
     ensure(
         game.send("state")?["screen"] == "inventory",
         "the inventory stays open",
@@ -191,6 +209,15 @@ impl Game {
             .into_iter()
             .filter(|label| label.starts_with("Recipe ") && label.contains(" ingredient "))
             .collect())
+    }
+
+    /// Whether a list entry shows `item` (stack labels end in ": <item> x<count>").
+    fn shows(&mut self, item: &str) -> Result<bool> {
+        let needle = format!(": {item} x");
+        Ok(self
+            .labels()?
+            .iter()
+            .any(|label| label.starts_with("Item ") && label.contains(&needle)))
     }
 
     fn has_items(&mut self) -> Result<bool> {

@@ -11,6 +11,11 @@ struct Session {
     browser: model::Browser,
 }
 
+/// Ctrl+O hid the overlay; the mod name tooltip line is on. Cached from the settings so
+/// the panel and tooltip hooks don't read them every frame.
+static HIDDEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static MOD_NAMES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 std::thread_local! {
     static BROWSER: std::cell::RefCell<Option<Session>> = const { std::cell::RefCell::new(None) };
 }
@@ -29,6 +34,71 @@ fn item(source: &NativeItem) -> model::ItemInfo {
         name: source.name.clone(),
         tags: source.tags.clone(),
     }
+}
+
+/// The item list as JEI shows it: the creative search tab's stacks in tab order, variants
+/// (enchanted books, potions) included, each with its tooltip and the tabs that list it.
+fn catalogue(game: &Game<'_>) -> Vec<model::Entry> {
+    let creative = &game.creative_screen;
+    let key = |stack: &horizon_client::items::ItemStack| {
+        (
+            stack.item.to_string(),
+            super::native_recipes::components(stack),
+        )
+    };
+    let mut tabs: std::collections::HashMap<(String, String), Vec<String>> = Default::default();
+    for tab in creative
+        .tabs
+        .iter()
+        .filter(|tab| !tab.search && !tab.inventory && !tab.hotbar)
+    {
+        let title = game.creative_tab_title(tab);
+        for stack in &tab.items {
+            let titles = tabs.entry(key(stack)).or_default();
+            if !titles.contains(&title) {
+                titles.push(title.clone());
+            }
+        }
+    }
+    creative
+        .search_items()
+        .iter()
+        .filter(|stack| stack.count > 0)
+        .map(|stack| {
+            // The tooltip the player sees: name first, then enchantments, effects, lore.
+            let mut lines = game
+                .stack_tooltip(stack)
+                .into_iter()
+                .map(|(text, _)| text.plain());
+            let name = lines.next().unwrap_or_default();
+            let (id, components) = key(stack);
+            let tabs = tabs.get(&(id.clone(), components.clone())).cloned();
+            model::Entry {
+                stack: model::Stack {
+                    id,
+                    count: 1,
+                    components,
+                },
+                name,
+                tooltip: lines.collect(),
+                tabs: tabs.unwrap_or_default(),
+            }
+        })
+        .collect()
+}
+
+/// The search modes the settings page chose.
+fn search_modes(game: &Game<'_>) -> model::SearchModes {
+    let mut modes = model::SearchModes::default();
+    for (field, (key, _, _)) in model::SearchModes::FIELDS.iter().enumerate() {
+        if let Some(mode) = game
+            .native_setting(model::ID, key)
+            .and_then(|value| model::SearchMode::parse(&value))
+        {
+            modes.set(field, mode);
+        }
+    }
+    modes
 }
 
 fn ingredient(source: &NativeRecipeStack) -> model::Ingredient {
@@ -162,10 +232,13 @@ pub(super) fn frame(game: &mut Game<'_>) {
             .as_ref()
             .is_none_or(|old| !std::sync::Arc::ptr_eq(&old.tables, &tables))
         {
-            let (browser, initial) = model::Browser::new(
+            let (mut browser, _) = model::Browser::new(
                 tables.items.iter().map(item).collect(),
                 tables.recipes.iter().map(recipe).collect(),
             );
+            browser.handle(model::Event::SetSearchModes(search_modes(game)), false, &[]);
+            load_flags(game);
+            let initial = browser.set_catalogue(catalogue(game));
             *session = Some(Session {
                 tables,
                 known,
@@ -174,6 +247,15 @@ pub(super) fn frame(game: &mut Game<'_>) {
             return Some((true, initial));
         }
         let session = session.as_mut()?;
+        if game.aei_panel_missing() {
+            // Lost (an empty list published outside a search): start again from the full
+            // list, with the search cleared.
+            let mut updates =
+                session
+                    .browser
+                    .handle(model::Event::Search(String::new()), false, &known);
+            return updates.pop().map(|update| (true, update));
+        }
         if session.known != known {
             session.known = known;
             return session
@@ -240,7 +322,7 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
 
     let original_event = event.clone();
     let known = game.native_known_recipes();
-    let give_enabled = game.native_setting(model::ID, "give").as_deref() == Some("true");
+    let give_enabled = flag(game, SETTING_GIVE);
     let updates =
         with_browser(|browser| browser.handle(event, give_enabled, &known)).unwrap_or_default();
     for update in updates {
@@ -295,4 +377,102 @@ pub(super) fn navigation(game: &mut Game<'_>, key: &str) -> bool {
         publish(game, update);
     }
     true
+}
+
+const SETTING_GIVE: &str = "give";
+const SETTING_HIDDEN: &str = "hidden";
+const SETTING_MOD_NAMES: &str = "mod_names";
+
+fn flag(game: &Game<'_>, key: &str) -> bool {
+    game.native_setting(model::ID, key).as_deref() == Some("true")
+}
+
+fn load_flags(game: &Game<'_>) {
+    use std::sync::atomic::Ordering::Relaxed;
+    HIDDEN.store(flag(game, SETTING_HIDDEN), Relaxed);
+    MOD_NAMES.store(flag(game, SETTING_MOD_NAMES), Relaxed);
+}
+
+/// Whether Ctrl+O hid AEI's overlay.
+pub(super) fn overlay_hidden() -> bool {
+    HIDDEN.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Ctrl+O: show or hide the overlay, remembered across sessions as JEI does.
+pub(super) fn toggle_overlay(game: &mut Game<'_>) {
+    let hidden = !overlay_hidden();
+    HIDDEN.store(hidden, std::sync::atomic::Ordering::Relaxed);
+    game.native_set_setting(
+        model::ID,
+        SETTING_HIDDEN,
+        if hidden { "true" } else { "false" },
+    );
+}
+
+/// The mod name line of an item's tooltip, when the setting is on: the mod that adds
+/// `item`, by its namespace ("Minecraft" for vanilla's).
+pub(super) fn tooltip_mod_name(item: &str) -> Option<String> {
+    MOD_NAMES
+        .load(std::sync::atomic::Ordering::Relaxed)
+        .then(|| model::mod_name(item.split_once(':').map_or("minecraft", |(ns, _)| ns)))
+}
+
+fn on_off(on: bool) -> &'static str {
+    if on { "ON" } else { "OFF" }
+}
+
+/// The settings page's buttons, in [`settings_click`]'s order.
+pub(super) fn settings_labels(game: &Game<'_>) -> Vec<String> {
+    let mut labels = vec![
+        format!(
+            "Panel clicks give items in Creative: {}",
+            on_off(flag(game, SETTING_GIVE))
+        ),
+        format!(
+            "Mod name in tooltips: {}",
+            on_off(flag(game, SETTING_MOD_NAMES))
+        ),
+    ];
+    let modes = search_modes(game);
+    for (field, (_, prefix, name)) in model::SearchModes::FIELDS.iter().enumerate() {
+        let mode = match modes.get(field) {
+            model::SearchMode::Enabled => "Enabled",
+            model::SearchMode::RequirePrefix => "Require prefix",
+            model::SearchMode::Disabled => "Disabled",
+        };
+        labels.push(format!("Search {name} ({prefix}): {mode}"));
+    }
+    labels
+}
+
+pub(super) fn settings_click(game: &mut Game<'_>, button: usize) {
+    match button {
+        0 | 1 => {
+            let key = [SETTING_GIVE, SETTING_MOD_NAMES][button];
+            let on = flag(game, key);
+            game.native_set_setting(model::ID, key, if on { "false" } else { "true" });
+            load_flags(game);
+        }
+        n if n - 2 < model::SearchModes::FIELDS.len() => {
+            let field = n - 2;
+            let mut modes = search_modes(game);
+            let next = modes.get(field).next();
+            modes.set(field, next);
+            game.native_set_setting(model::ID, model::SearchModes::FIELDS[field].0, next.name());
+            let known = game.native_known_recipes();
+            let updates = with_browser(|browser| {
+                browser.handle(model::Event::SetSearchModes(modes), false, &known)
+            })
+            .unwrap_or_default();
+            for update in updates {
+                match update {
+                    model::Update::ItemList(items) => {
+                        game.aei_show_search_result(items.iter().map(native).collect());
+                    }
+                    other => publish(game, other),
+                }
+            }
+        }
+        _ => {}
+    }
 }

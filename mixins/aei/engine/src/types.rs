@@ -69,6 +69,103 @@ pub struct ItemInfo {
     pub tags: Vec<String>,
 }
 
+/// One stack of the item list: an item, or one of its variants (an enchanted book, a
+/// potion) with its components, as the creative tabs list them.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Entry {
+    pub stack: Stack,
+    pub name: String,
+    /// The tooltip's lines after the name, for `#` searches.
+    pub tooltip: Vec<String>,
+    /// The titles of the creative tabs that list it, for `%` searches.
+    pub tabs: Vec<String>,
+}
+
+/// How a prefixed search field takes part in searches (JEI's search modes).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SearchMode {
+    /// Plain words search it too, and its prefix searches it alone.
+    Enabled,
+    /// Only its prefix searches it.
+    RequirePrefix,
+    /// Its prefix is an ordinary character.
+    Disabled,
+}
+
+impl SearchMode {
+    pub const ALL: [Self; 3] = [Self::Enabled, Self::RequirePrefix, Self::Disabled];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Enabled => "enabled",
+            Self::RequirePrefix => "prefix",
+            Self::Disabled => "disabled",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|mode| mode.name() == text)
+    }
+
+    /// The mode a settings button moves to on a click.
+    pub fn next(self) -> Self {
+        match self {
+            Self::Enabled => Self::RequirePrefix,
+            Self::RequirePrefix => Self::Disabled,
+            Self::Disabled => Self::Enabled,
+        }
+    }
+}
+
+/// The search mode of each prefixed field: `@` mod, `#` tooltip, `$` tag, `%` creative
+/// tab and `&` identifier.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SearchModes {
+    pub mod_name: SearchMode,
+    pub tooltip: SearchMode,
+    pub tag: SearchMode,
+    pub tab: SearchMode,
+    pub id: SearchMode,
+}
+
+impl Default for SearchModes {
+    /// JEI's defaults, with identifiers searched by plain words as AEI always has.
+    fn default() -> Self {
+        Self {
+            mod_name: SearchMode::RequirePrefix,
+            tooltip: SearchMode::Enabled,
+            tag: SearchMode::RequirePrefix,
+            tab: SearchMode::RequirePrefix,
+            id: SearchMode::Enabled,
+        }
+    }
+}
+
+impl SearchModes {
+    /// Each field's settings key, prefix and label.
+    pub const FIELDS: [(&'static str, char, &'static str); 5] = [
+        ("search_mod", '@', "Mod name"),
+        ("search_tooltip", '#', "Tooltip"),
+        ("search_tag", '$', "Tag"),
+        ("search_tab", '%', "Creative tab"),
+        ("search_id", '&', "Identifier"),
+    ];
+
+    pub fn get(&self, field: usize) -> SearchMode {
+        [self.mod_name, self.tooltip, self.tag, self.tab, self.id][field.min(4)]
+    }
+
+    pub fn set(&mut self, field: usize, mode: SearchMode) {
+        match field {
+            0 => self.mod_name = mode,
+            1 => self.tooltip = mode,
+            2 => self.tag = mode,
+            3 => self.tab = mode,
+            _ => self.id = mode,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Stack {
     pub id: String,
@@ -128,6 +225,7 @@ pub struct RecipePage {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
     Search(String),
+    SetSearchModes(SearchModes),
     ClickItem { index: usize, right: bool },
     Lookup { stack: Stack, uses: bool },
     ClickRecipeIngredient { stack: Stack, right: bool },

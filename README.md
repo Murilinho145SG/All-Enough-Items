@@ -3,9 +3,18 @@
 All Enough Items (AEI) is a client-side item and recipe browser, distributed
 through Horizon's native mod system.
 
-- Search item names and identifiers, namespaces (`@minecraft`), tags (`#logs`)
-  and explicit identifiers (`&minecraft:oak_log`). Combine terms, quoted phrases,
-  exclusions (`-`) and alternatives (`|`).
+- The item list is the creative inventory's, in its tab order, with every
+  variant it lists (enchanted books, potions, tipped arrows...), then any other
+  registered item.
+- Search with JEI's prefixes: names (plain words), mods (`@minecraft`), tooltip
+  lines (`#sharpness`), tags (`$logs`), creative tabs (`%food`) and identifiers
+  (`&minecraft:oak_log`). Combine terms, quoted phrases, exclusions (`-`) and
+  alternatives (`|`). The settings page sets each prefix to *Enabled* (plain
+  words search it too), *Require prefix* or *Disabled*; tooltips and identifiers
+  are searched by plain words by default.
+- Press **Ctrl+O** to hide or show the overlay (remembered between sessions).
+- An optional setting adds the item's mod name to every item tooltip, in blue
+  italics as JEI does (off by default, since it changes vanilla tooltips).
 - Hover an item and press **R** for recipes or **U** for uses. In the catalogue,
   left-click shows recipes and right-click shows uses.
 - Browse recipes in a JEI-style window: category tabs above it, the crafting
@@ -31,8 +40,7 @@ preserved.
 The interface reproduces [JEI](https://www.curseforge.com/minecraft/mc-mods/jei)'s
 layout and controls (see `docs/design.md`). Its graphics are drawing primitives,
 vanilla GUI sprites and the JEI-style sprites Horizon already ships; no JEI
-implementation or assets are included. Bookmarks, cheat mode and the recipe
-sorting toggles are not implemented. Full JEI feature parity is not claimed: the pinned native contract
+implementation or assets are included. Bookmarks and the recipe sorting toggles are not implemented yet. Full JEI feature parity is not claimed: the pinned native contract
 provides crafting, cooking, stonecutting, smithing and brewing, but not dynamic
 anvil, grindstone, fuel or compost categories. AEI extends Horizon's creative
 inventory panel guard for its own recipe viewer and leaves the vanilla recipe

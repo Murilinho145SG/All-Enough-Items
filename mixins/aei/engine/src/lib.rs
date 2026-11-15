@@ -9,7 +9,8 @@ pub mod viewer;
 
 pub use browser::Browser;
 pub use types::{
-    Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard, RecipeKind, RecipePage, Stack, Update,
+    Entry, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard, RecipeKind, RecipePage,
+    SearchMode, SearchModes, Stack, Update,
 };
 pub(crate) use types::{Lookup, Station};
 
@@ -24,3 +25,30 @@ pub const SHAPELESS_NOTE: &str = "Shapeless";
 pub const NOTE_SEPARATOR: char = '\n';
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// A mod's display name from its namespace, as JEI's tooltips name it: vanilla's is
+/// "Minecraft"; others are the namespace's words capitalised (`create_addon` →
+/// "Create Addon").
+pub fn mod_name(namespace: &str) -> String {
+    namespace
+        .split(['_', '-'])
+        .filter(|word| !word.is_empty())
+        .map(|word| {
+            let mut chars = word.chars();
+            chars.next().map_or_else(String::new, |first| {
+                first.to_uppercase().chain(chars).collect()
+            })
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn mod_names_come_from_namespaces() {
+        assert_eq!(super::mod_name("minecraft"), "Minecraft");
+        assert_eq!(super::mod_name("create_addon"), "Create Addon");
+        assert_eq!(super::mod_name("a--b"), "A B");
+    }
+}
