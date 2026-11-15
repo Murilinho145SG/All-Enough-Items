@@ -22,7 +22,12 @@ through Horizon's native mod system.
   animated furnace and brewing progress, cook time and experience. The item list
   stays on the right, with page arrows above it and the search field below.
 - Click ingredients to follow recipes, click the category title to browse every
-  recipe (one tab per category), and use **Left/Right** to navigate lookup history.
+  recipe (one tab per category), and use **Left/Right** (or **Backspace** to go
+  back) to navigate lookup history.
+- Ingredients with alternatives cycle every second; hold **Shift** to pause them.
+  A slot whose alternatives are exactly a tag says so in its tooltip ("Accepts
+  any: #minecraft:planks"), and with advanced tooltips (F3+H) an output shows its
+  recipe id.
 - Press **Ctrl+F** to focus the search field.
 - Scroll or click arrows to turn pages. Right-click the search field to clear it.
 - Click **+** to move a recipe's ingredients into the crafting grid through the

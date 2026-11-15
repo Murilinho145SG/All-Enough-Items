@@ -23,13 +23,13 @@ const FLAME_TICKS: f32 = 300.0;
 struct Navigation {
     identity: (String, u32),
     page: usize,
-    since: Instant,
 }
 
 thread_local! {
     static ITEM_SCROLL: RefCell<i32> = const { RefCell::new(0) };
     static NAVIGATION: RefCell<Option<Navigation>> = const { RefCell::new(None) };
     static STARTED: Instant = Instant::now();
+    static CYCLE: RefCell<Option<(Instant, f64)>> = const { RefCell::new(None) };
 }
 
 /// What AEI shows this frame: the recipe window (when a lookup is open) and the item list
@@ -75,11 +75,7 @@ fn recipe_view(game: &Game<'_>, screen: [f32; 2]) -> Option<Viewer> {
             .as_ref()
             .is_none_or(|state| state.identity != identity)
         {
-            *state = Some(Navigation {
-                identity,
-                page: 0,
-                since: Instant::now(),
-            });
+            *state = Some(Navigation { identity, page: 0 });
         }
         state.as_ref().map_or(0, |state| state.page)
     });
@@ -141,12 +137,23 @@ fn screen(game: &Game<'_>, batch: &HudBatch, recipes: bool) -> Option<Screen> {
     (view.is_some() || items.is_some()).then_some(Screen { view, items })
 }
 
+/// Seconds the ingredients have cycled for: the clock stands still while Shift is held,
+/// as JEI pauses its cycling.
+fn cycle_seconds(game: &Game<'_>) -> usize {
+    CYCLE.with(|cell| {
+        let mut clock = cell.borrow_mut();
+        let now = Instant::now();
+        let (last, total) = clock.get_or_insert((now, 0.0));
+        if !game.has_shift_down() {
+            *total += now.duration_since(*last).as_secs_f64();
+        }
+        *last = now;
+        *total as usize
+    })
+}
+
 fn cycle<'a>(stacks: &'a [BrowserStack], game: &Game<'_>) -> Option<&'a BrowserStack> {
-    let seconds = NAVIGATION.with(|cell| {
-        cell.borrow()
-            .as_ref()
-            .map_or(0, |state| state.since.elapsed().as_secs() as usize)
-    });
+    let seconds = cycle_seconds(game);
     // Resolve before cycling so unavailable alternatives cannot create blank frames.
     let valid: Vec<_> = stacks
         .iter()
@@ -535,13 +542,22 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
             .find(|(_, rect)| viewer::contains(*rect, cursor))?;
         Some(category_title(game, &page.tabs.get(*i)?.item))
     });
+    let mut slot_lines = Vec::new();
     let hovered = screen
         .view
         .as_ref()
         .filter(|_| tab_title.is_none())
         .and_then(|view| {
             hovered_recipe(game, view)
-                .map(|(_, _, stack)| stack)
+                .map(|(card, slot, stack)| {
+                    let output = game
+                        .panel_shown()
+                        .and_then(|shown| shown.recipes.as_ref()?.recipes.get(card))
+                        .is_some_and(|recipe| slot == recipe.slots.len());
+                    let advanced = game.settings.file.bool("advancedItemTooltips");
+                    slot_lines = crate::game::aei_glue::slot_lines(card, slot, output, advanced);
+                    stack
+                })
                 .or_else(|| hovered_station(game, view))
         })
         .or_else(|| {
@@ -562,7 +578,11 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
     } else if let Some(stack) =
         hovered.and_then(|sent| super::browser_stack(world_items!(game), &sent))
     {
-        game.draw_stack_tooltip(batch, &stack, cursor.0, cursor.1);
+        let extra = slot_lines
+            .into_iter()
+            .map(|line| (horizon_client::text::Text::legacy(&line), u32::MAX))
+            .collect();
+        game.draw_stack_tooltip_with(batch, &stack, false, cursor.0, cursor.1, extra);
     } else if let Some((items, _)) = &screen.items
         && viewer::contains(items.settings, cursor)
     {

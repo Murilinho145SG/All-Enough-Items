@@ -46,6 +46,32 @@ pub(crate) fn cooking_note(ticks: u32, experience: f32) -> String {
 }
 
 impl Browser {
+    /// The id of the recipe on card `card` of the shown page.
+    pub fn shown_recipe_id(&self, card: usize) -> Option<&str> {
+        let recipe = &self.recipes[*self.shown_recipe_ids.get(card)?];
+        (!recipe.id.is_empty()).then_some(recipe.id.as_str())
+    }
+
+    /// The tag an input slot of card `card` stands for: the tag whose items are exactly
+    /// the slot's alternatives (JEI's "Accepts any"). None for a single item, or for
+    /// alternatives no single tag lists; the shortest name wins a tie.
+    pub fn shown_slot_tag(&self, card: usize, slot: usize) -> Option<&str> {
+        let recipe = &self.recipes[*self.shown_recipe_ids.get(card)?];
+        let mut items: Vec<usize> = recipe.inputs.get(slot)?.iter().map(|i| i.item).collect();
+        items.sort_unstable();
+        items.dedup();
+        if items.len() < 2 {
+            return None;
+        }
+        let first = self.items.get(items[0])?;
+        first
+            .tags
+            .iter()
+            .filter(|tag| self.tag_members.get(*tag) == Some(&items))
+            .min_by_key(|tag| (tag.len(), tag.as_str()))
+            .map(String::as_str)
+    }
+
     fn item_id(&self, ingredient: &Ingredient) -> &str {
         self.items
             .get(ingredient.item)

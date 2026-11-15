@@ -20,7 +20,8 @@ fn aei_history_key(game: &mut crate::game::Game<'_>, key: &str) -> std::ops::Con
             crate::game::Screen::Inventory | crate::game::Screen::Creative
         )
         && !game.mod_browser_typing()
-        && crate::game::aei_glue::navigation(game, key)
+        && (crate::game::aei_glue::navigation(game, key)
+            || (key == "key.keyboard.backspace" && crate::game::aei_glue::back(game)))
     {
         return std::ops::ControlFlow::Break(());
     }

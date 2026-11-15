@@ -122,6 +122,7 @@ fn recipe(source: &NativeRecipe) -> model::Recipe {
         NativeRecipeKind::Brewing => model::RecipeKind::Brewing,
     };
     model::Recipe {
+        id: source.id.clone(),
         kind,
         width: source.width,
         height: source.height,
@@ -344,6 +345,23 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
     }
 }
 
+/// The tooltip lines JEI adds to a recipe slot: "Accepts any" with the tag an input's
+/// alternatives stand for, and the recipe's id on its output with advanced tooltips.
+pub(super) fn slot_lines(card: usize, slot: usize, output: bool, advanced: bool) -> Vec<String> {
+    with_browser(|browser| {
+        let mut lines = Vec::new();
+        if output {
+            if advanced && let Some(id) = browser.shown_recipe_id(card) {
+                lines.push(format!("\u{a7}8Recipe ID: {id}"));
+            }
+        } else if let Some(tag) = browser.shown_slot_tag(card, slot) {
+            lines.push(format!("\u{a7}7Accepts any: #{tag}"));
+        }
+        lines
+    })
+    .unwrap_or_default()
+}
+
 /// The recipe-book ids of the shown recipes, in card order.
 pub(super) fn shown_book_ids() -> Vec<i32> {
     with_browser(|browser| browser.shown_book_ids()).unwrap_or_default()
@@ -475,4 +493,19 @@ pub(super) fn settings_click(game: &mut Game<'_>, button: usize) {
         }
         _ => {}
     }
+}
+
+/// JEI's Backspace: back to the previous lookup, when a recipe page is open.
+pub(super) fn back(game: &mut Game<'_>) -> bool {
+    if !game.native_on(model::ID) || game.panel.recipes.is_none() {
+        return false;
+    }
+    let known = game.native_known_recipes();
+    let updates = with_browser(|browser| browser.handle(model::Event::Back, false, &known))
+        .unwrap_or_default();
+    game.aei_reset_viewer();
+    for update in updates {
+        publish(game, update);
+    }
+    true
 }

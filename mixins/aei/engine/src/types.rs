@@ -183,6 +183,8 @@ pub struct Ingredient {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Recipe {
+    /// The recipe's id (`minecraft:oak_planks`), or "".
+    pub id: String,
     pub kind: RecipeKind,
     pub width: u32,
     pub height: u32,

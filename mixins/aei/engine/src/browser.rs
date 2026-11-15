@@ -19,6 +19,8 @@ pub struct Browser {
     by_id: HashMap<String, usize>,
     recipes: Vec<Recipe>,
     recipe_index: recipes::RecipeIndex,
+    /// Registry indexes of each tag's items, sorted.
+    tag_members: HashMap<String, Vec<usize>>,
     /// The item list: every entry the search can show, in display order.
     catalogue: Vec<Entry>,
     indexed: Vec<Indexed>,
@@ -39,9 +41,16 @@ impl Browser {
             .enumerate()
             .map(|(index, item)| (item.id.clone(), index))
             .collect();
+        let mut tag_members: HashMap<String, Vec<usize>> = HashMap::new();
+        for (index, item) in items.iter().enumerate() {
+            for tag in &item.tags {
+                tag_members.entry(tag.clone()).or_default().push(index);
+            }
+        }
         let mut browser = Self {
             items,
             by_id,
+            tag_members,
             recipes,
             recipe_index,
             ..Self::default()
@@ -316,6 +325,7 @@ mod tests {
         };
         let recipes = vec![
             Recipe {
+                id: String::new(),
                 kind: RecipeKind::Shapeless,
                 width: 0,
                 height: 0,
@@ -326,6 +336,7 @@ mod tests {
                 book_id: 7,
             },
             Recipe {
+                id: String::new(),
                 kind: RecipeKind::Shaped,
                 width: 1,
                 height: 2,
@@ -498,6 +509,61 @@ mod tests {
             modes.set(field, crate::SearchMode::Disabled);
             assert_eq!(modes.get(field), crate::SearchMode::Disabled);
         }
+    }
+
+    #[test]
+    fn slots_name_the_tag_their_alternatives_stand_for() {
+        let item = |id: &str, tags: &[&str]| ItemInfo {
+            id: id.into(),
+            name: id.into(),
+            tags: tags.iter().map(|t| (*t).to_owned()).collect(),
+        };
+        let items = vec![
+            item("minecraft:oak_planks", &["minecraft:planks", "test:wood"]),
+            item("minecraft:birch_planks", &["minecraft:planks", "test:wood"]),
+            item("minecraft:oak_log", &["test:wood"]),
+            item("minecraft:stick", &[]),
+        ];
+        let ingredient = |item| Ingredient {
+            item,
+            count: 1,
+            components: String::new(),
+        };
+        let recipe = Recipe {
+            id: "minecraft:stick".into(),
+            kind: RecipeKind::Shaped,
+            width: 1,
+            height: 3,
+            inputs: vec![
+                vec![ingredient(0), ingredient(1)],
+                vec![ingredient(1), ingredient(0), ingredient(2)],
+                vec![ingredient(0)],
+            ],
+            outputs: vec![ingredient(3)],
+            ticks: 0,
+            experience: 0.0,
+            book_id: -1,
+        };
+        let (mut browser, _) = Browser::new(items, vec![recipe]);
+        let stick = Stack {
+            id: "minecraft:stick".into(),
+            count: 1,
+            components: String::new(),
+        };
+        browser.handle(
+            Event::Lookup {
+                stack: stick,
+                uses: false,
+            },
+            false,
+            &[],
+        );
+        assert_eq!(browser.shown_recipe_id(0), Some("minecraft:stick"));
+        assert_eq!(browser.shown_slot_tag(0, 0), Some("minecraft:planks"));
+        // Order and extra tags don't matter; the members must match exactly.
+        assert_eq!(browser.shown_slot_tag(0, 1), Some("test:wood"));
+        assert_eq!(browser.shown_slot_tag(0, 2), None);
+        assert_eq!(browser.shown_slot_tag(1, 0), None);
     }
 
     #[test]
