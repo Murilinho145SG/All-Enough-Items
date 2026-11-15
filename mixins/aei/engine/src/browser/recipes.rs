@@ -45,6 +45,31 @@ pub(crate) fn cooking_note(ticks: u32, experience: f32) -> String {
     format!("{experience}{}{time}", crate::NOTE_SEPARATOR)
 }
 
+/// A fuel's note, as JEI words it: how many items it smelts, then its burn time.
+pub(crate) fn fuel_note(ticks: u32) -> String {
+    let smelts = ticks as f32 / 200.0;
+    let smelts = if smelts.fract() == 0.0 {
+        format!("{smelts:.0}")
+    } else {
+        format!("{smelts:.1}")
+    };
+    let noun = if smelts == "1" { "item" } else { "items" };
+    format!(
+        "Smelts {smelts} {noun}{}Burn time: {}s",
+        crate::NOTE_SEPARATOR,
+        ticks / 20
+    )
+}
+
+/// A compostable item's note: its chance to add a layer.
+pub(crate) fn compost_note(chance: f32) -> String {
+    format!(
+        "{}Chance: {:.0}%",
+        crate::NOTE_SEPARATOR,
+        (chance.clamp(0.0, 1.0) * 100.0).round()
+    )
+}
+
 impl Browser {
     /// The id of the recipe on card `card` of the shown page.
     pub fn shown_recipe_id(&self, card: usize) -> Option<&str> {
@@ -179,6 +204,8 @@ impl Browser {
                 cooking_note(recipe.ticks, recipe.experience),
             ),
             RecipeKind::Stonecutting => (Layout::Single, 1, 1, String::new()),
+            RecipeKind::Fuel => (Layout::Single, 1, 1, fuel_note(recipe.ticks)),
+            RecipeKind::Compost => (Layout::Single, 1, 1, compost_note(recipe.experience)),
             RecipeKind::Smithing => (Layout::Smithing, 3, 1, String::new()),
             RecipeKind::Brewing => (Layout::Brewing, 2, 1, String::new()),
         };

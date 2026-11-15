@@ -45,6 +45,10 @@ pub enum Category {
     Stonecutting,
     Smithing,
     Brewing,
+    /// JEI's fuel category: a burning flame, the fuel and its burn time.
+    Fuel,
+    /// JEI's compostable category: the item and its chance.
+    Compost,
 }
 
 impl Category {
@@ -56,7 +60,11 @@ impl Category {
                 "minecraft:blast_furnace" | "minecraft:smoker" => Self::QuickCooking,
                 _ => Self::Smelting,
             },
-            Layout::Single => Self::Stonecutting,
+            Layout::Single => match station {
+                "minecraft:coal" => Self::Fuel,
+                "minecraft:composter" => Self::Compost,
+                _ => Self::Stonecutting,
+            },
             Layout::Smithing => Self::Smithing,
             Layout::Brewing => Self::Brewing,
         }
@@ -71,6 +79,8 @@ impl Category {
             Self::Stonecutting => (82.0, 34.0),
             Self::Smithing => (108.0, 28.0),
             Self::Brewing => (114.0, 61.0),
+            Self::Fuel => (98.0, 34.0),
+            Self::Compost => (98.0, 24.0),
         }
     }
 
@@ -177,6 +187,24 @@ impl Card {
                     slots.push((i, at(i as f32 * SLOT, 5.0, SLOT)));
                 }
                 ([ox + 61.0, oy + 6.0, 22.0, 16.0], at(90.0, 5.0, SLOT))
+            }
+            Category::Fuel => {
+                if inputs > 0 {
+                    slots.push((0, at(0.0, 16.0, SLOT)));
+                }
+                flame = Some([ox + 2.0, oy + 1.0, 14.0, 14.0]);
+                animated = true;
+                top_note = [ox + 22.0, oy + 3.0, cw - 22.0, 10.0];
+                bottom_note = [ox + 22.0, oy + 20.0, cw - 22.0, 10.0];
+                // No arrow and no result: the text says what the fuel does.
+                ([ox, oy, 0.0, 0.0], [ox, oy, 0.0, 0.0])
+            }
+            Category::Compost => {
+                if inputs > 0 {
+                    slots.push((0, at(0.0, 3.0, SLOT)));
+                }
+                bottom_note = [ox + 22.0, oy + 8.0, cw - 22.0, 10.0];
+                ([ox, oy, 0.0, 0.0], [ox, oy, 0.0, 0.0])
             }
             Category::Brewing => {
                 // The base potion fills the three bottles; the reagent sits on top.
@@ -361,6 +389,12 @@ pub fn catalysts(station: &str) -> &'static [&'static str] {
         "minecraft:stonecutter" => &["minecraft:stonecutter"],
         "minecraft:smithing_table" => &["minecraft:smithing_table"],
         "minecraft:brewing_stand" => &["minecraft:brewing_stand"],
+        "minecraft:coal" => &[
+            "minecraft:furnace",
+            "minecraft:blast_furnace",
+            "minecraft:smoker",
+        ],
+        "minecraft:composter" => &["minecraft:composter"],
         _ => &[],
     }
 }
@@ -536,6 +570,18 @@ impl BookmarkList {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fuel_and_compost_cards_have_one_input_and_no_result() {
+        let fuel = Category::of(Layout::Single, "minecraft:coal");
+        assert_eq!(fuel, Category::Fuel);
+        let card = Card::new(fuel, 1, 1, 1, 0.0, 0.0);
+        assert!(card.flame.is_some() && card.arrow[2] == 0.0);
+        assert_eq!(card.slots[1].1[2], 0.0);
+        let compost = Card::new(Category::Compost, 1, 1, 1, 0.0, 0.0);
+        assert!(compost.flame.is_none() && compost.bottom_note[2] > 0.0);
+        assert_eq!(catalysts("minecraft:coal").len(), 3);
+    }
 
     #[test]
     fn catalysts_stack_in_a_growing_station_tab() {

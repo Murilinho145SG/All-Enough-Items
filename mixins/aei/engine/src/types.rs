@@ -9,6 +9,10 @@ pub enum RecipeKind {
     Stonecutting,
     Smithing,
     Brewing,
+    /// A furnace fuel: its input burns for `ticks`.
+    Fuel,
+    /// A compostable item: `experience` holds its chance (0 to 1) to add a layer.
+    Compost,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,10 +25,12 @@ pub(crate) enum Station {
     Stonecutting,
     Smithing,
     Brewing,
+    Fuel,
+    Compost,
 }
 
 impl Station {
-    pub(crate) const ALL: [Self; 8] = [
+    pub(crate) const ALL: [Self; 10] = [
         Self::Crafting,
         Self::Smelting,
         Self::Blasting,
@@ -33,6 +39,8 @@ impl Station {
         Self::Stonecutting,
         Self::Smithing,
         Self::Brewing,
+        Self::Fuel,
+        Self::Compost,
     ];
 
     pub(crate) fn of(kind: RecipeKind) -> Self {
@@ -45,6 +53,8 @@ impl Station {
             RecipeKind::Stonecutting => Self::Stonecutting,
             RecipeKind::Smithing => Self::Smithing,
             RecipeKind::Brewing => Self::Brewing,
+            RecipeKind::Fuel => Self::Fuel,
+            RecipeKind::Compost => Self::Compost,
         }
     }
 
@@ -58,6 +68,8 @@ impl Station {
             Self::Stonecutting => "minecraft:stonecutter",
             Self::Smithing => "minecraft:smithing_table",
             Self::Brewing => "minecraft:brewing_stand",
+            Self::Fuel => "minecraft:coal",
+            Self::Compost => "minecraft:composter",
         }
     }
 }

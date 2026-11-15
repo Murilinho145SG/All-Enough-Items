@@ -302,6 +302,8 @@ fn category_title(game: &Game<'_>, station: &str) -> String {
         "minecraft:campfire" | "minecraft:soul_campfire" => "Campfire Cooking".into(),
         "minecraft:stonecutter" => "Stonecutting".into(),
         "minecraft:smithing_table" => "Smithing".into(),
+        "minecraft:coal" => "Fuel".into(),
+        "minecraft:composter" => "Compostable".into(),
         _ => "Brewing".into(),
     }
 }
@@ -338,6 +340,29 @@ fn draw_cooking(game: &Game<'_>, batch: &mut HudBatch, card: &viewer::Card, note
         let font = &game.gui.atlas.font;
         let tx = (x + (w - font.width(time)) / 2.0).round();
         batch.text(atlas, time, tx, y + h - 8.0, paint::grey_text(), false);
+    }
+}
+
+/// A fuel or compostable card: the burning flame (fuel) and its two grey note lines.
+fn draw_note_card(game: &Game<'_>, batch: &mut HudBatch, card: &viewer::Card, note: &str) {
+    let atlas = &game.gui.atlas;
+    if let Some([fx, fy, fw, fh]) = card.flame {
+        let left = 1.0 - (seconds() * 20.0 % FLAME_TICKS) / FLAME_TICKS;
+        let start = batch.vertices.len();
+        batch.sprite(atlas, FLAME, fx, fy);
+        batch.clip_since(
+            start,
+            fx,
+            fy + (fh * (1.0 - left)).round(),
+            fx + fw,
+            fy + fh,
+        );
+    }
+    let (top, bottom) = note.split_once(NOTE_SEPARATOR).unwrap_or(("", note));
+    for (text, [x, y, w, _]) in [(top, card.top_note), (bottom, card.bottom_note)] {
+        if !text.is_empty() && w > 0.0 {
+            batch.text(atlas, text, x, y, paint::grey_text(), false);
+        }
     }
 }
 
@@ -483,6 +508,8 @@ fn draw_recipes(
         match recipe.layout {
             NativeRecipeLayout::Cooking => draw_cooking(game, batch, card, &recipe.note),
             NativeRecipeLayout::Brewing => draw_brewing(game, batch, card),
+            // Fuel and compostables: no arrow, their note says what they do.
+            _ if card.arrow[2] == 0.0 => draw_note_card(game, batch, card, &recipe.note),
             _ => paint::arrow(game, batch, card.arrow),
         }
         if recipe.note == SHAPELESS_NOTE {

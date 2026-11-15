@@ -127,6 +127,83 @@ fn catalogue(game: &Game<'_>) -> Vec<model::Entry> {
         .collect()
 }
 
+/// JEI's fuel and compostable categories, which the recipe tables don't hold: every item
+/// that burns in a furnace (with its burn time) or goes into a composter (with its
+/// chance), in registry order.
+fn fuels_and_compostables(game: &Game<'_>, items: &[NativeItem]) -> Vec<model::Recipe> {
+    let registry = game.items();
+    let providers = game.res.providers();
+    let mut fuels = Vec::new();
+    let mut composts = Vec::new();
+    for (index, native) in items.iter().enumerate() {
+        let Some(info) = registry.get(&native.id) else {
+            continue;
+        };
+        let input = vec![vec![model::Ingredient {
+            item: index,
+            count: 1,
+            components: String::new(),
+        }]];
+        let card = |kind, id: String, ticks, experience| model::Recipe {
+            id,
+            kind,
+            width: 0,
+            height: 0,
+            inputs: input.clone(),
+            outputs: Vec::new(),
+            ticks,
+            experience,
+            book_id: -1,
+        };
+        if info.fuel.is_some() {
+            let stack = horizon_client::items::ItemStack::new(native.id.as_str(), 1);
+            let ticks = providers.burn_time(registry, &stack, false);
+            if ticks > 0 {
+                let id = format!("aei:fuel/{}", native.id);
+                fuels.push(card(model::RecipeKind::Fuel, id, ticks as u32, 0.0));
+            }
+        }
+        if let Some(chance) = info.compostable.as_ref().and_then(compost_chance) {
+            let id = format!("aei:compost/{}", native.id);
+            composts.push(card(model::RecipeKind::Compost, id, 0, chance));
+        }
+    }
+    fuels.extend(composts);
+    fuels
+}
+
+/// The chance a compostable item's `layers` provider adds a layer to a composter that
+/// isn't empty (an empty one always takes it): a plain number, vanilla's named
+/// providers, or a weighted list of 0 and 1 layers.
+fn compost_chance(layers: &serde_json::Value) -> Option<f32> {
+    use serde_json::Value;
+    match layers {
+        Value::Number(n) => Some(if n.as_f64()? >= 1.0 { 1.0 } else { 0.0 }),
+        Value::String(name) => Some(match name.rsplit('/').next()? {
+            "always_add_one" => 1.0,
+            "low" => 0.3,
+            "low_medium" => 0.5,
+            "medium" => 0.65,
+            "medium_high" => 0.85,
+            "high" => 1.0,
+            _ => return None,
+        }),
+        Value::Object(map) => {
+            let list = map.get("default").unwrap_or(layers);
+            let entries = list.get("distribution")?.as_array()?;
+            let weight = |e: &Value| e.get("weight").and_then(Value::as_f64).unwrap_or(1.0);
+            let total: f64 = entries.iter().map(weight).sum();
+            let adding: f64 = entries
+                .iter()
+                .filter(|e| e.get("data").and_then(Value::as_i64).unwrap_or(0) > 0)
+                .map(weight)
+                .sum();
+            (total > 0.0).then(|| (adding / total) as f32)
+        }
+        _ => None,
+    }
+}
+
 /// The search modes the settings page chose.
 fn search_modes(game: &Game<'_>) -> model::SearchModes {
     let mut modes = model::SearchModes::default();
@@ -288,10 +365,10 @@ pub(super) fn frame(game: &mut Game<'_>) {
             .as_ref()
             .is_none_or(|old| !std::sync::Arc::ptr_eq(&old.tables, &tables))
         {
-            let (mut browser, _) = model::Browser::new(
-                tables.items.iter().map(item).collect(),
-                tables.recipes.iter().map(recipe).collect(),
-            );
+            let mut recipes: Vec<model::Recipe> = tables.recipes.iter().map(recipe).collect();
+            recipes.extend(fuels_and_compostables(game, &tables.items));
+            let (mut browser, _) =
+                model::Browser::new(tables.items.iter().map(item).collect(), recipes);
             browser.handle(model::Event::SetSearchModes(search_modes(game)), false, &[]);
             browser.handle(model::Event::SetSort(sort_order(game)), false, &[]);
             browser.handle(

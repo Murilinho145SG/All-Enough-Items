@@ -846,6 +846,66 @@ mod tests {
     }
 
     #[test]
+    fn fuels_and_compostables_are_categories_with_notes() {
+        let (items, mut recipes) = fixture();
+        let one = |item| {
+            vec![vec![Ingredient {
+                item,
+                count: 1,
+                components: String::new(),
+            }]]
+        };
+        recipes.push(Recipe {
+            id: "aei:fuel/minecraft:stick".into(),
+            kind: RecipeKind::Fuel,
+            width: 0,
+            height: 0,
+            inputs: one(3),
+            outputs: vec![],
+            ticks: 100,
+            experience: 0.0,
+            book_id: -1,
+        });
+        recipes.push(Recipe {
+            id: "aei:compost/minecraft:stick".into(),
+            kind: RecipeKind::Compost,
+            width: 0,
+            height: 0,
+            inputs: one(3),
+            outputs: vec![],
+            ticks: 0,
+            experience: 0.3,
+            book_id: -1,
+        });
+        let (mut browser, _) = Browser::new(items, recipes);
+        let stick = Stack {
+            id: "minecraft:stick".into(),
+            count: 1,
+            components: String::new(),
+        };
+        let page = browser.handle(
+            Event::Lookup {
+                stack: stick,
+                uses: true,
+            },
+            false,
+            &[],
+        );
+        let Update::RecipeList(page) = &page[0] else {
+            panic!("expected recipes")
+        };
+        let ids: Vec<_> = page.stations.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, ["minecraft:coal", "minecraft:composter"]);
+        assert_eq!(page.cards[0].note, "Smelts 0.5 items\nBurn time: 5s");
+        let page = browser.handle(Event::SelectStation(1), false, &[]);
+        assert!(matches!(&page[0], Update::RecipeList(p) if p.cards[0].note == "\nChance: 30%"));
+        assert_eq!(
+            super::recipes::fuel_note(200),
+            "Smelts 1 item\nBurn time: 10s"
+        );
+    }
+
+    #[test]
     fn lookup_tabs_and_back_keep_a_navigation_stack() {
         let (items, recipes) = fixture();
         let (mut browser, _) = Browser::new(items, recipes);

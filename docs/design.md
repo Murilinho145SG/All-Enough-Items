@@ -113,7 +113,10 @@ separately.
 These need Horizon native-contract support and are documented rather than
 worked around:
 
-- Dynamic anvil, grindstone, fuel and compost categories are not exposed.
+- Dynamic anvil and grindstone categories are not exposed. Fuel and compostable
+  categories are built by `glue::fuels_and_compostables` from the items' data
+  components (burn time through Horizon's providers, chance from the named
+  compostable providers or a weighted list).
 - A query or category shows at most 256 recipes (the native page limit).
 - Third-party panels in the creative inventory are not supported.
 - At the pinned Horizon revision, placing a furnace-family recipe in singleplayer
