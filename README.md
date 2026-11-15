@@ -26,6 +26,10 @@ through Horizon's native mod system.
   station on the left, category and page arrows, recipes on bordered plates with
   animated furnace and brewing progress, cook time and experience. The item list
   stays on the right, with page arrows above it and the search field below.
+- Recipe categories follow the order in the `categories` file of AEI's mod data
+  folder (`horizon-mods/.horizon-mod-data/aei/`), which AEI writes with every
+  category on first use, like JEI's category order configuration: move lines to
+  reorder the tabs, or put `!` before one to hide that category.
 - The category's catalysts (crafting table and crafter, both campfires, ...)
   stand in a column left of the window; click one for its recipes, right-click
   for its uses.
@@ -66,7 +70,7 @@ preserved.
 The interface reproduces [JEI](https://www.curseforge.com/minecraft/mc-mods/jei)'s
 layout and controls (see `docs/design.md`). Its graphics are drawing primitives,
 vanilla GUI sprites and the JEI-style sprites Horizon already ships; no JEI
-implementation or assets are included. The recipe sorting toggles are not implemented yet. Full JEI feature parity is not claimed: the pinned native contract
+implementation or assets are included. Full JEI feature parity is not claimed: the pinned native contract
 provides crafting, cooking, stonecutting, smithing and brewing, but not dynamic
 anvil, grindstone, fuel or compost categories. AEI extends Horizon's creative
 inventory panel guard for its own recipe viewer and leaves the vanilla recipe

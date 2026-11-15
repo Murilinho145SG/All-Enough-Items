@@ -303,6 +303,14 @@ pub(super) fn frame(game: &mut Game<'_>) {
                 .native_setting(model::ID, SETTING_HIDDEN_ITEMS)
                 .unwrap_or_default();
             browser.load_hidden(&hidden);
+            // JEI's editable category order: written once with every category, then read.
+            match game.native_setting(model::ID, SETTING_CATEGORIES) {
+                Some(text) => browser.load_categories(&text),
+                None => {
+                    let text = browser.categories_text();
+                    game.native_set_setting(model::ID, SETTING_CATEGORIES, &text);
+                }
+            }
             load_flags(game);
             let saved = game
                 .native_setting(model::ID, SETTING_BOOKMARKS)
@@ -480,6 +488,7 @@ const SETTING_CENTERED: &str = "centered_search";
 const SETTING_COLUMNS: &str = "columns";
 const SETTING_SORT: &str = "sort";
 const SETTING_HIDDEN_ITEMS: &str = "hidden_items";
+const SETTING_CATEGORIES: &str = "categories";
 
 fn flag(game: &Game<'_>, key: &str) -> bool {
     game.native_setting(model::ID, key).as_deref() == Some("true")

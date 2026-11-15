@@ -147,8 +147,8 @@ impl Browser {
             return Vec::new();
         }
         let wanted = Station::of(self.recipes[focus].kind);
-        lookup.station = Station::ALL
-            .into_iter()
+        lookup.station = self
+            .stations()
             .filter(|s| ids.iter().any(|&i| Station::of(self.recipes[i].kind) == *s))
             .position(|s| s == wanted)
             .unwrap_or(0);

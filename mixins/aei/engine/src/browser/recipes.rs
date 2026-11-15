@@ -94,7 +94,9 @@ impl Browser {
     pub(super) fn page_recipe_ids(&self, lookup: &Lookup) -> Vec<usize> {
         // "All recipes" (the category title's click): every recipe, one tab per station.
         if lookup.category.is_some() {
-            return (0..self.recipes.len()).collect();
+            return (0..self.recipes.len())
+                .filter(|&id| self.shows_category(self.recipes[id].kind))
+                .collect();
         }
         let Some(&item) = self.by_id.get(&lookup.item.id) else {
             return Vec::new();
@@ -109,6 +111,7 @@ impl Browser {
             .into_iter()
             .flatten()
             .copied()
+            .filter(|&id| self.shows_category(self.recipes[id].kind))
             .filter(|&id| {
                 let recipe = &self.recipes[id];
                 if lookup.uses {

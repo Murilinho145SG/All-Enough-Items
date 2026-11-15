@@ -6,6 +6,7 @@ use search::{Indexed, SearchQuery};
 use std::collections::HashMap;
 
 mod bookmarks;
+mod categories;
 mod history;
 mod listing;
 mod recipes;
@@ -38,6 +39,9 @@ pub struct Browser {
     /// Hidden `(item, components)`; `*` components hide every stack of the item.
     hidden: std::collections::HashSet<(String, String)>,
     edit_mode: bool,
+    /// The recipe categories in tab order, without the hidden ones.
+    categories: Vec<Station>,
+    hidden_categories: Vec<Station>,
     history: history::History,
     shown_recipe_ids: Vec<usize>,
 }
@@ -64,6 +68,7 @@ impl Browser {
             recipe_index,
             ..Self::default()
         };
+        browser.categories = Station::ALL.to_vec();
         browser.set_entries(Vec::new());
         let update = browser.item_list();
         (browser, update)
@@ -123,8 +128,8 @@ impl Browser {
             });
         };
         let all = self.page_recipe_ids(&lookup);
-        let available: Vec<Station> = Station::ALL
-            .into_iter()
+        let available: Vec<Station> = self
+            .stations()
             .filter(|station| {
                 all.iter()
                     .any(|&index| Station::of(self.recipes[index].kind) == *station)
@@ -312,8 +317,8 @@ impl Browser {
                 };
                 let station = Station::of(self.recipes[recipe].kind);
                 // Stay on the same category among the tabs of all recipes.
-                let tab = Station::ALL
-                    .into_iter()
+                let tab = self
+                    .stations()
                     .filter(|s| self.recipes.iter().any(|r| Station::of(r.kind) == *s))
                     .position(|s| s == station)
                     .unwrap_or(0);
@@ -783,6 +788,61 @@ mod tests {
             panic!("expected item list")
         };
         assert_eq!(list.len(), 3);
+    }
+
+    #[test]
+    fn categories_follow_the_saved_order_and_hidden_ones_disappear() {
+        let (items, mut recipes) = fixture();
+        recipes[1].kind = RecipeKind::Smelting;
+        let (mut browser, _) = Browser::new(items, recipes);
+        let all = |b: &mut Browser| b.handle(Event::ShowCategory, false, &[]);
+        browser.handle(
+            Event::ClickItem {
+                index: 0,
+                right: true,
+            },
+            false,
+            &[],
+        );
+        browser.load_categories("# comment\nminecraft:furnace\n!minecraft:smoker\nbogus\n");
+        let text = browser.categories_text();
+        assert!(text.contains("minecraft:furnace\nminecraft:crafting_table\n"));
+        assert!(text.ends_with("!minecraft:smoker\n"));
+        // Oak planks are used by a smelting recipe (first tab now) and nothing else.
+        let page = browser.handle(
+            Event::Lookup {
+                stack: Stack {
+                    id: "minecraft:oak_planks".into(),
+                    count: 1,
+                    components: String::new(),
+                },
+                uses: true,
+            },
+            false,
+            &[],
+        );
+        assert!(
+            matches!(&page[0], Update::RecipeList(p) if p.stations[0].id == "minecraft:furnace")
+        );
+        let shown = all(&mut browser);
+        assert!(matches!(&shown[0], Update::RecipeList(p)
+            if p.stations.iter().map(|s| s.id.as_str()).collect::<Vec<_>>()
+                == ["minecraft:furnace", "minecraft:crafting_table"]));
+        // Hiding smelting leaves planks without uses.
+        browser.load_categories("!minecraft:furnace\n");
+        let none = browser.handle(
+            Event::Lookup {
+                stack: Stack {
+                    id: "minecraft:oak_planks".into(),
+                    count: 1,
+                    components: String::new(),
+                },
+                uses: true,
+            },
+            false,
+            &[],
+        );
+        assert!(none.is_empty());
     }
 
     #[test]
