@@ -123,8 +123,15 @@ fn publish(game: &mut Game<'_>, update: model::Update) {
             let _ = game.native_give(&item, count);
         }
         model::Update::PlaceKnownRecipe(id) => {
-            if let Err(message) = game.native_place_recipe(id, game.has_shift_down()) {
-                game.native_chat(&message);
+            match game.native_place_recipe(id, game.has_shift_down()) {
+                Err(message) => game.native_chat(&message),
+                // Placed: the recipe view closes so the grid shows, as JEI does.
+                Ok(()) => {
+                    if let Some(update) = with_browser(|browser| browser.close_recipes()) {
+                        game.aei_reset_viewer();
+                        publish(game, update);
+                    }
+                }
             }
         }
     }
@@ -253,6 +260,11 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
         }
         publish(game, update);
     }
+}
+
+/// The recipe-book ids of the shown recipes, in card order.
+pub(super) fn shown_book_ids() -> Vec<i32> {
+    with_browser(|browser| browser.shown_book_ids()).unwrap_or_default()
 }
 
 pub(super) fn show_category(game: &mut Game<'_>) {

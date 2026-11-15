@@ -10,4 +10,4 @@ pub const KEY_FORWARD: [&str; 3] = ["forward", "Next recipe lookup", "key.keyboa
 pub use aei_engine::{
     Browser, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard, RecipeKind, Stack, Update,
 };
-pub use aei_engine::{SHAPELESS_NOTE, viewer};
+pub use aei_engine::{NOTE_SEPARATOR, SHAPELESS_NOTE, viewer};

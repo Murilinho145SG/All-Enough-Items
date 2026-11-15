@@ -113,6 +113,22 @@ impl Browser {
         Some(self.render_page(known))
     }
 
+    /// Closes the recipe view after a recipe was moved into the grid, as JEI does: back to
+    /// the catalogue, with the lookup history cleared.
+    pub fn close_recipes(&mut self) -> Update {
+        self.history.clear();
+        self.render_page(&[])
+    }
+
+    /// The recipe-book ids of the recipes on the shown page, in card order (`-1` for a
+    /// recipe the book doesn't hold).
+    pub fn shown_book_ids(&self) -> Vec<i32> {
+        self.shown_recipe_ids
+            .iter()
+            .map(|&recipe| self.recipes[recipe].book_id)
+            .collect()
+    }
+
     pub fn refresh(&mut self, known: &[i32]) -> Option<Update> {
         self.history
             .current()
@@ -159,14 +175,29 @@ impl Browser {
                 vec![self.render_page(known)]
             }
             Event::ShowCategory => {
+                // Already showing every recipe: nothing more to show.
+                if self
+                    .history
+                    .current()
+                    .is_none_or(|current| current.category.is_some())
+                {
+                    return Vec::new();
+                }
                 let Some(&recipe) = self.shown_recipe_ids.first() else {
                     return Vec::new();
                 };
+                let station = Station::of(self.recipes[recipe].kind);
+                // Stay on the same category among the tabs of all recipes.
+                let tab = Station::ALL
+                    .into_iter()
+                    .filter(|s| self.recipes.iter().any(|r| Station::of(r.kind) == *s))
+                    .position(|s| s == station)
+                    .unwrap_or(0);
                 let candidate = Lookup {
-                    category: Some(Station::of(self.recipes[recipe].kind)),
+                    category: Some(station),
                     item: Stack::default(),
                     uses: false,
-                    station: 0,
+                    station: tab,
                 };
                 self.history.push(candidate);
                 vec![self.render_page(known)]
@@ -442,9 +473,23 @@ mod tests {
         );
         let all = browser.handle(Event::ShowCategory, false, &[7]);
         assert!(matches!(&all[0], Update::RecipeList(page) if page.cards.len() == 2));
+        assert_eq!(browser.shown_book_ids().len(), 2);
+        // Every recipe is already shown: a second click changes nothing.
+        assert!(browser.handle(Event::ShowCategory, false, &[7]).is_empty());
         assert_eq!(
             browser.handle(Event::Place(1), false, &[8]),
             [Update::PlaceKnownRecipe(8)]
+        );
+        // Closing after a placement returns to the catalogue with no history left.
+        assert!(
+            matches!(browser.close_recipes(), Update::RecipeList(page) if page.cards.is_empty())
+        );
+        assert!(browser.shown_book_ids().is_empty());
+        let forward = browser.handle(Event::Forward, false, &[7]);
+        assert!(
+            forward
+                .iter()
+                .all(|update| matches!(update, Update::RecipeList(page) if page.cards.is_empty()))
         );
     }
 }

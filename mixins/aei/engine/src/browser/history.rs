@@ -28,6 +28,12 @@ impl History {
         self.cursor = self.cursor.saturating_sub(1);
     }
 
+    /// Back to the catalogue with no lookups to return to.
+    pub(super) fn clear(&mut self) {
+        self.entries.clear();
+        self.cursor = 0;
+    }
+
     pub(super) fn forward(&mut self) {
         self.cursor = (self.cursor + 1).min(self.entries.len());
     }

@@ -30,6 +30,21 @@ impl RecipeIndex {
     }
 }
 
+/// A cooking recipe's note: the experience line, a [`crate::NOTE_SEPARATOR`], then the cook
+/// time line (`0.1 XP`, `10s`). Either line is empty when its value is zero.
+pub(crate) fn cooking_note(ticks: u32, experience: f32) -> String {
+    let experience = match experience {
+        xp if xp <= 0.0 || !xp.is_finite() => String::new(),
+        xp if xp.fract() == 0.0 => format!("{xp:.1} XP"),
+        xp => format!("{xp} XP"),
+    };
+    let time = match ticks / 20 {
+        0 => String::new(),
+        seconds => format!("{seconds}s"),
+    };
+    format!("{experience}{}{time}", crate::NOTE_SEPARATOR)
+}
+
 impl Browser {
     fn item_id(&self, ingredient: &Ingredient) -> &str {
         self.items
@@ -51,13 +66,9 @@ impl Browser {
     }
 
     pub(super) fn page_recipe_ids(&self, lookup: &Lookup) -> Vec<usize> {
-        if let Some(station) = lookup.category {
-            return self
-                .recipes
-                .iter()
-                .enumerate()
-                .filter_map(|(i, recipe)| (Station::of(recipe.kind) == station).then_some(i))
-                .collect();
+        // "All recipes" (the category title's click): every recipe, one tab per station.
+        if lookup.category.is_some() {
+            return (0..self.recipes.len()).collect();
         }
         let Some(item) = self.items.iter().position(|item| item.id == lookup.item.id) else {
             return Vec::new();
@@ -122,11 +133,12 @@ impl Browser {
             RecipeKind::Smelting
             | RecipeKind::Blasting
             | RecipeKind::Smoking
-            | RecipeKind::Campfire => {
-                let seconds = recipe.ticks as f32 / 20.0;
-                let note = format!("{seconds} s, {:.2} XP", recipe.experience);
-                (Layout::Cooking, 1, 1, note)
-            }
+            | RecipeKind::Campfire => (
+                Layout::Cooking,
+                1,
+                1,
+                cooking_note(recipe.ticks, recipe.experience),
+            ),
             RecipeKind::Stonecutting => (Layout::Single, 1, 1, String::new()),
             RecipeKind::Smithing => (Layout::Smithing, 3, 1, String::new()),
             RecipeKind::Brewing => (Layout::Brewing, 2, 1, String::new()),
@@ -146,5 +158,15 @@ impl Browser {
             note,
             place_enabled,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn cooking_notes_read_like_jei() {
+        assert_eq!(super::cooking_note(200, 0.1), "0.1 XP\n10s");
+        assert_eq!(super::cooking_note(100, 1.0), "1.0 XP\n5s");
+        assert_eq!(super::cooking_note(600, 0.0), "\n30s");
     }
 }

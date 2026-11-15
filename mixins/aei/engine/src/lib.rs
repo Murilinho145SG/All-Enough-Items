@@ -20,4 +20,7 @@ pub(crate) const STACK_LIMIT: usize = 64;
 /// Marker carried in the native recipe-view note field for shapeless crafting.
 pub const SHAPELESS_NOTE: &str = "Shapeless";
 
+/// Separates a cooking recipe's experience line from its cook-time line in the note field.
+pub const NOTE_SEPARATOR: char = '\n';
+
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

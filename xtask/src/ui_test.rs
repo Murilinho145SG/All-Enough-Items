@@ -46,7 +46,8 @@ pub fn run(socket: &Path, out: &Path) -> Result {
         game.send(r"type \b")?;
     }
 
-    game.click("Stone", true)?;
+    // The first catalogue entry is Stone; right-click shows its uses.
+    game.click("Item 0", true)?;
     let first = game.ingredients()?;
     ensure(
         first.iter().any(|label| label.starts_with("Recipe 1 ")),

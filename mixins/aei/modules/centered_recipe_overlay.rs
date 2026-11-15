@@ -1,13 +1,24 @@
+// AEI's screens over a container: the item list on the right (always), and the recipe
+// window with its category tabs and station tab when a lookup is open. Geometry comes from
+// the engine's `viewer`; drawing from `aei_recipe_paint`.
 use std::{cell::RefCell, ops::ControlFlow, time::Instant};
 
 use super::aei_recipe_paint as paint;
-use super::{BrowserEvent, BrowserStack, Game, Layout, Owner, SLOT, inside};
+use super::{BrowserEvent, BrowserStack, Game, Layout, Owner, inside};
 use crate::game::aei::{
-    Layout as RecipeLayout,
-    viewer::{self, Viewer},
+    NOTE_SEPARATOR, SHAPELESS_NOTE,
+    viewer::{self, Category, Sidebar, Viewer},
 };
 use crate::game::native_hooks::{NativeRecipeLayout, NativeRecipeView};
 use horizon_client::hud::{HudBatch, rgba};
+
+const FLAME: &str = "gui/sprites/container/furnace/lit_progress";
+const COOK_ARROW: &str = "gui/sprites/container/furnace/burn_progress";
+const BREW_ARROW: &str = "gui/sprites/container/brewing_stand/brew_progress";
+const BUBBLES: &str = "gui/sprites/container/brewing_stand/bubbles";
+const BLAZE_FUEL: &str = "gui/sprites/container/brewing_stand/fuel_length";
+/// Ticks a flame takes to burn down before it restarts.
+const FLAME_TICKS: f32 = 300.0;
 
 struct Navigation {
     identity: (String, u32),
@@ -18,14 +29,29 @@ struct Navigation {
 thread_local! {
     static ITEM_SCROLL: RefCell<i32> = const { RefCell::new(0) };
     static NAVIGATION: RefCell<Option<Navigation>> = const { RefCell::new(None) };
+    static STARTED: Instant = Instant::now();
 }
 
-fn active(game: &mut Game<'_>) -> Option<Owner> {
+/// What AEI shows this frame: the recipe window (when a lookup is open) and the item list
+/// with Horizon's matching panel layout.
+struct Screen {
+    view: Option<Viewer>,
+    items: Option<(Sidebar, Layout)>,
+}
+
+/// AEI's panel is up on a container screen.
+fn owned(game: &mut Game<'_>) -> Option<Owner> {
     let owner = game.browser_sync()?;
-    (owner.native_id() == crate::game::aei::ID && game.panel.recipes.is_some()).then_some(owner)
+    (owner.native_id() == crate::game::aei::ID).then_some(owner)
 }
 
-fn recipe_layout(recipe: &NativeRecipeView) -> RecipeLayout {
+/// AEI's panel is up with a recipe lookup open.
+fn active(game: &mut Game<'_>) -> Option<Owner> {
+    owned(game).filter(|_| game.panel.recipes.is_some())
+}
+
+fn recipe_layout(recipe: &NativeRecipeView) -> crate::game::aei::Layout {
+    use crate::game::aei::Layout as RecipeLayout;
     match recipe.layout {
         NativeRecipeLayout::Grid => RecipeLayout::Grid,
         NativeRecipeLayout::Cooking => RecipeLayout::Cooking,
@@ -35,39 +61,84 @@ fn recipe_layout(recipe: &NativeRecipeView) -> RecipeLayout {
     }
 }
 
-fn layouts(game: &Game<'_>, batch: &HudBatch) -> Option<(Viewer, Option<Layout>)> {
+fn seconds() -> f32 {
+    STARTED.with(|start| start.elapsed().as_secs_f32())
+}
+
+/// The recipe window for the open lookup.
+fn recipe_view(game: &Game<'_>, screen: [f32; 2]) -> Option<Viewer> {
     let page = game.panel_shown()?.recipes.as_ref()?;
     let index = NAVIGATION.with(|cell| {
         let mut state = cell.borrow_mut();
+        let identity = (page.title.clone(), page.tab);
         if state
             .as_ref()
-            .is_none_or(|state| state.identity != (page.title.clone(), page.tab))
+            .is_none_or(|state| state.identity != identity)
         {
             *state = Some(Navigation {
-                identity: (page.title.clone(), page.tab),
+                identity,
                 page: 0,
                 since: Instant::now(),
             });
         }
         state.as_ref().map_or(0, |state| state.page)
     });
+    let station = page
+        .tabs
+        .get(page.tab as usize)
+        .map_or("", |stack| stack.item.as_str());
+    let category = page.recipes.first().map_or(Category::Crafting, |recipe| {
+        Category::of(recipe_layout(recipe), station)
+    });
     let recipes: Vec<_> = page
         .recipes
         .iter()
-        .map(|r| (recipe_layout(r), r.width, r.height, r.slots.len()))
+        .map(|r| (r.width, r.height, r.slots.len()))
         .collect();
-    let screen = [batch.width, batch.height];
-    let view = Viewer::new(screen, page.tabs.len(), &recipes, index)?;
-    let items = view.sidebar(screen).map(|items| Layout {
-        area: items.area,
-        grid: (items.area[0], 26.0),
-        columns: items.columns,
-        rows: items.rows,
-        arrows_y: 2.0,
-        search: items.search,
-        settings: Some(items.settings),
+    Viewer::new(
+        screen,
+        page.tabs.len(),
+        page.tab as usize,
+        category,
+        &recipes,
+        index,
+    )
+}
+
+/// The right edge of the screen's GUI: the recipe window, or the open container.
+fn gui_right(game: &Game<'_>, batch: &HudBatch, view: Option<&Viewer>) -> f32 {
+    if let Some(view) = view {
+        view.area[0] + view.area[2]
+    } else if game.screen == crate::game::Screen::Creative {
+        Game::creative_origin(batch).0 + 195.0
+    } else {
+        let image = game.container_image(batch);
+        (image.left + image.width) as f32
+    }
+}
+
+fn screen(game: &Game<'_>, batch: &HudBatch, recipes: bool) -> Option<Screen> {
+    let size = [batch.width, batch.height];
+    let view = if recipes {
+        Some(recipe_view(game, size)?)
+    } else {
+        None
+    };
+    let right = gui_right(game, batch, view.as_ref());
+    let items = Sidebar::new(size, right, game.panel.stacks.len()).map(|items| {
+        let layout = Layout {
+            area: items.area,
+            grid: items.grid,
+            columns: items.columns,
+            rows: items.rows,
+            arrows_y: items.nav[1],
+            search: items.search,
+            settings: Some(items.settings),
+        };
+        (items, layout)
     });
-    Some((view, items))
+    // Without a recipe window, AEI only takes over when its list fits.
+    (view.is_some() || items.is_some()).then_some(Screen { view, items })
 }
 
 fn cycle<'a>(stacks: &'a [BrowserStack], game: &Game<'_>) -> Option<&'a BrowserStack> {
@@ -98,7 +169,7 @@ fn hovered_item(game: &Game<'_>, layout: &Layout) -> Option<(usize, BrowserStack
     let first = game.panel.page * layout.per_page();
     for offset in 0..layout.per_page() {
         let (x, y) = layout.slot(offset);
-        if inside(game.cursor, [x, y, SLOT, SLOT]) {
+        if inside(game.cursor, [x, y, viewer::SLOT, viewer::SLOT]) {
             let index = first + offset;
             game.panel.stacks.get(index)?.as_ref()?;
             return Some((index, game.panel_shown()?.items.get(index)?.clone()));
@@ -118,187 +189,271 @@ fn hovered_recipe(game: &Game<'_>, view: &Viewer) -> Option<(usize, usize, Brows
     None
 }
 
+/// The station or category icon under the pointer.
+fn hovered_station(game: &Game<'_>, view: &Viewer) -> Option<BrowserStack> {
+    let page = game.panel_shown()?.recipes.as_ref()?;
+    let tab = view
+        .tabs
+        .iter()
+        .find(|(_, rect)| viewer::contains(*rect, game.cursor))
+        .map(|(i, _)| *i)
+        .or_else(|| viewer::contains(view.catalyst, game.cursor).then_some(page.tab as usize))?;
+    page.tabs.get(tab).cloned()
+}
+
+/// Draws `sent` centred in `rect`, with the slot highlight when `highlight` and hovered.
 fn draw_stack(
     game: &Game<'_>,
     batch: &mut HudBatch,
     sent: &BrowserStack,
     rect: viewer::Rect,
     name: &str,
+    highlight: bool,
 ) {
     let Some(stack) = super::browser_stack(world_items!(game), sent) else {
         return;
     };
     let [x, y, w, h] = rect;
-    game.draw_item(batch, &stack, x + (w - 16.0) / 2.0, y + (h - 16.0) / 2.0);
-    if viewer::contains(rect, game.cursor) {
-        paint::fill(
-            game,
-            batch,
-            [x + 1.0, y + 1.0, w - 2.0, h - 2.0],
-            rgba(255, 255, 255, 100),
-        );
+    let item = (
+        (x + (w - 16.0) / 2.0).floor(),
+        (y + (h - 16.0) / 2.0).floor(),
+    );
+    game.draw_item(batch, &stack, item.0, item.1);
+    if highlight && viewer::contains(rect, game.cursor) {
+        paint::highlight(game, batch, item);
     }
     horizon_client::widgets::record(name, rect, true);
 }
 
-fn category(game: &Game<'_>, station: &str) -> String {
-    let (key, fallback) = match station {
-        "minecraft:crafting_table" => ("container.crafting", "Crafting"),
-        "minecraft:furnace" => ("block.minecraft.furnace", "Smelting"),
-        "minecraft:blast_furnace" => ("block.minecraft.blast_furnace", "Blasting"),
-        "minecraft:smoker" => ("block.minecraft.smoker", "Smoking"),
-        "minecraft:campfire" => ("block.minecraft.campfire", "Campfire Cooking"),
-        "minecraft:stonecutter" => ("block.minecraft.stonecutter", "Stonecutting"),
-        "minecraft:smithing_table" => ("block.minecraft.smithing_table", "Smithing"),
-        _ => ("block.minecraft.brewing_stand", "Brewing"),
-    };
-    game.translate(key, fallback)
+/// The category's title as JEI names it.
+fn category_title(game: &Game<'_>, station: &str) -> String {
+    match station {
+        "minecraft:crafting_table" => game.translate("container.crafting", "Crafting"),
+        "minecraft:furnace" => "Smelting".into(),
+        "minecraft:blast_furnace" => "Blasting".into(),
+        "minecraft:smoker" => "Smoking".into(),
+        "minecraft:campfire" | "minecraft:soul_campfire" => "Campfire Cooking".into(),
+        "minecraft:stonecutter" => "Stonecutting".into(),
+        "minecraft:smithing_table" => "Smithing".into(),
+        _ => "Brewing".into(),
+    }
 }
 
-fn draw_recipes(game: &Game<'_>, batch: &mut HudBatch, view: &Viewer) {
+fn draw_cooking(game: &Game<'_>, batch: &mut HudBatch, card: &viewer::Card, note: &str) {
+    let atlas = &game.gui.atlas;
+    let (experience, time) = note.split_once(NOTE_SEPARATOR).unwrap_or(("", note));
+    let cook = time
+        .trim_end_matches('s')
+        .parse::<f32>()
+        .unwrap_or(10.0)
+        .max(0.05);
+    let now = seconds();
+    paint::arrow(game, batch, card.arrow);
+    let [ax, ay, _, _] = card.arrow;
+    batch.sprite_part(atlas, COOK_ARROW, ax, ay, (now % cook) / cook);
+    if let Some([fx, fy, fw, fh]) = card.flame {
+        let left = 1.0 - (now * 20.0 % FLAME_TICKS) / FLAME_TICKS;
+        let start = batch.vertices.len();
+        batch.sprite(atlas, FLAME, fx, fy);
+        batch.clip_since(
+            start,
+            fx,
+            fy + (fh * (1.0 - left)).round(),
+            fx + fw,
+            fy + fh,
+        );
+    }
+    if card.top_note[2] > 0.0 && !experience.is_empty() {
+        paint::right_aligned(game, batch, experience, card.top_note);
+    }
+    if !time.is_empty() {
+        let [x, y, w, h] = card.bottom_note;
+        let font = &game.gui.atlas.font;
+        let tx = (x + (w - font.width(time)) / 2.0).round();
+        batch.text(atlas, time, tx, y + h - 8.0, paint::grey_text(), false);
+    }
+}
+
+fn draw_brewing(game: &Game<'_>, batch: &mut HudBatch, card: &viewer::Card) {
+    let atlas = &game.gui.atlas;
+    let (ox, oy) = (card.area[0] + 4.0, card.area[1] + 4.0);
+    let now = seconds();
+    batch.sprite(atlas, BLAZE_FUEL, ox + 5.0, oy + 30.0);
+    // The bubbles rise in seven steps; the arrow fills down over 20 seconds.
+    let step = (now * 20.0 / 14.0) as usize % 7;
+    let bubbles = [0.0f32, 5.0, 9.0, 13.0, 18.0, 23.0, 29.0][step].min(28.0);
+    let (bx, by) = (ox + 9.0, oy + 1.0);
+    let start = batch.vertices.len();
+    batch.sprite(atlas, BUBBLES, bx, by);
+    batch.clip_since(start, bx, by + 28.0 - bubbles, bx + 12.0, by + 29.0);
+    let [ax, ay, aw, ah] = card.arrow;
+    let filled = ((now % 20.0) / 20.0 * ah).round();
+    let start = batch.vertices.len();
+    batch.sprite(atlas, BREW_ARROW, ax, ay);
+    batch.clip_since(start, ax, ay, ax + aw, ay + filled);
+}
+
+/// What a recipe's "+" button can do on the open screen.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Transfer {
+    /// The player holds the ingredients: moves them into the grid.
+    Ready,
+    /// Some ingredients are missing: the grid shows the recipe as a ghost.
+    Missing,
+    /// The player's recipe book doesn't hold the recipe, so it can't be placed.
+    Locked,
+}
+
+impl Transfer {
+    fn tooltip(self) -> &'static str {
+        match self {
+            Self::Ready => "Move Items",
+            Self::Missing => "Missing Items",
+            Self::Locked => "Recipe not unlocked",
+        }
+    }
+}
+
+/// The "+" button of each card on the page, parallel to `view.cards`. None hides it:
+/// the open screen has no crafting grid that fits the recipe (a crafting table for 3x3
+/// recipes, the inventory's 2x2 grid for small ones), or it isn't a crafting recipe.
+fn transfers(game: &mut Game<'_>, view: &Viewer) -> Vec<Option<Transfer>> {
+    let ids = crate::game::aei_glue::shown_book_ids();
+    let Some(page) = game.panel_shown().and_then(|shown| shown.recipes.as_ref()) else {
+        return vec![None; view.cards.len()];
+    };
+    let cards: Vec<(i32, bool)> = view
+        .cards
+        .iter()
+        .map(|(index, _)| {
+            let recipe = &page.recipes[*index];
+            let crafting = recipe.layout == NativeRecipeLayout::Grid;
+            let id = ids.get(*index).copied().filter(|_| crafting).unwrap_or(-1);
+            (id, recipe.action == Some(true))
+        })
+        .collect();
+    let ids: Vec<i32> = cards.iter().map(|(id, _)| *id).collect();
+    game.aei_recipe_status(&ids)
+        .into_iter()
+        .zip(cards)
+        .map(|(status, (_, known))| {
+            status.map(|craftable| match (known, craftable) {
+                (false, _) => Transfer::Locked,
+                (true, true) => Transfer::Ready,
+                (true, false) => Transfer::Missing,
+            })
+        })
+        .collect()
+}
+
+/// The "+" button under the pointer and what it does.
+fn hovered_transfer(
+    game: &Game<'_>,
+    view: &Viewer,
+    transfers: &[Option<Transfer>],
+) -> Option<(usize, Transfer)> {
+    view.cards
+        .iter()
+        .zip(transfers)
+        .find_map(|((index, card), transfer)| {
+            viewer::contains(card.action, game.cursor)
+                .then_some(*transfer)
+                .flatten()
+                .map(|transfer| (*index, transfer))
+        })
+}
+
+fn draw_recipes(
+    game: &Game<'_>,
+    batch: &mut HudBatch,
+    view: &Viewer,
+    transfers: &[Option<Transfer>],
+) {
     let Some(page) = game.panel_shown().and_then(|shown| shown.recipes.as_ref()) else {
         return;
     };
-    for (i, rect) in view.tabs.iter().enumerate() {
-        paint::window(game, batch, *rect);
-        if i != page.tab as usize {
-            paint::fill(
-                game,
-                batch,
-                [rect[0] + 3.0, rect[1] + 3.0, rect[2] - 6.0, rect[3] - 4.0],
-                rgba(162, 162, 162, 255),
-            );
-        }
-        draw_stack(
-            game,
-            batch,
-            &page.tabs[i],
-            [rect[0] + 4.0, rect[1] + 3.0, 18.0, 18.0],
-            &format!("Recipe category {i}"),
-        );
-    }
+    let station = page.tabs.get(page.tab as usize);
     paint::window(game, batch, view.area);
-    if let Some(station) = page.tabs.get(page.tab as usize) {
-        paint::window(game, batch, view.catalyst);
-        draw_stack(game, batch, station, view.catalyst, "Recipe catalyst");
-        paint::fill(game, batch, view.category, rgba(160, 160, 160, 255));
-        paint::label(
-            game,
-            batch,
-            &category(game, &station.item),
-            view.category,
-            u32::MAX,
-        );
-        horizon_client::widgets::record("Show all recipes in category", view.category, true);
+
+    paint::strip(game, batch, view.category);
+    if let Some(station) = station {
+        let title = category_title(game, &station.item);
+        let [x, y, w, h] = view.category;
+        paint::title(game, batch, &title, [x + 14.0, y, w - 28.0, h]);
     }
-    paint::fill(game, batch, view.page_label, rgba(160, 160, 160, 255));
-    paint::label(
+    horizon_client::widgets::record("Show all recipes in category", view.category, true);
+    paint::strip(game, batch, view.page_label);
+    paint::title(
         game,
         batch,
-        &format!("{}/{}", view.page + 1, view.pages.len()),
+        &format!("{}/{}", view.page + 1, view.pages),
         view.page_label,
-        u32::MAX,
     );
-    for (i, rect) in view.category_arrows.iter().enumerate() {
-        paint::button(
-            game,
-            batch,
-            *rect,
-            if i == 0 { "<" } else { ">" },
-            page.tabs.len() > 1,
-            if i == 0 {
-                "Previous category"
-            } else {
-                "Next category"
-            },
-        );
+    let names = [
+        ["Previous category", "Next category"],
+        ["Previous recipe page", "Next recipe page"],
+    ];
+    let enabled = [page.tabs.len() > 1, view.pages > 1];
+    for (row, arrows) in [view.category_arrows, view.page_arrows].iter().enumerate() {
+        for (i, rect) in arrows.iter().enumerate() {
+            paint::arrow_button(game, batch, *rect, i == 1, enabled[row], names[row][i]);
+        }
     }
-    for (i, rect) in view.page_arrows.iter().enumerate() {
-        paint::button(
-            game,
-            batch,
-            *rect,
-            if i == 0 { "<" } else { ">" },
-            view.pages.len() > 1,
-            if i == 0 {
-                "Previous recipe page"
-            } else {
-                "Next recipe page"
-            },
-        );
-    }
-    for (index, card) in &view.cards {
+
+    for ((index, card), transfer) in view.cards.iter().zip(transfers) {
         let recipe = &page.recipes[*index];
-        paint::bevel(game, batch, card.area, true);
-        if recipe.layout == NativeRecipeLayout::Grid {
-            for i in 0..9 {
-                paint::slot(
-                    game,
-                    batch,
-                    [
-                        card.area[0] + 4.0 + (i % 3) as f32 * SLOT,
-                        card.area[1] + 4.0 + (i / 3) as f32 * SLOT,
-                        SLOT,
-                        SLOT,
-                    ],
-                );
-            }
+        paint::plate(game, batch, card.area);
+        for rect in &card.empty {
+            paint::slot(game, batch, *rect);
         }
         for (_, rect) in &card.slots {
             paint::slot(game, batch, *rect);
         }
-        paint::arrow(game, batch, card.arrow);
-        if let Some(rect) = card.flame {
-            batch.sprite(
-                &game.gui.atlas,
-                "gui/sprites/container/furnace/lit_progress",
-                rect[0],
-                rect[1],
-            );
+        match recipe.layout {
+            NativeRecipeLayout::Cooking => draw_cooking(game, batch, card, &recipe.note),
+            NativeRecipeLayout::Brewing => draw_brewing(game, batch, card),
+            _ => paint::arrow(game, batch, card.arrow),
         }
-        if recipe.note == crate::game::aei::SHAPELESS_NOTE {
-            paint::label(
-                game,
-                batch,
-                "*",
-                [card.area[0] + 112.0, card.area[1] + 2.0, 12.0, 12.0],
-                paint::INK,
-            );
-        } else if !recipe.note.is_empty() {
-            batch.text(
-                &game.gui.atlas,
-                &recipe.note,
-                card.note.0,
-                card.note.1,
-                paint::INK,
-                false,
-            );
+        if recipe.note == SHAPELESS_NOTE {
+            paint::shapeless(game, batch, card.shapeless);
         }
-        if let Some(enabled) = recipe.action {
-            paint::button(
-                game,
-                batch,
-                card.action,
-                "+",
-                enabled,
-                &format!("Move recipe {index}"),
-            );
+        if let Some(transfer) = transfer {
+            let name = format!("Move recipe {index}");
+            let enabled = *transfer != Transfer::Locked;
+            let missing = *transfer == Transfer::Missing;
+            paint::transfer_button(game, batch, card.action, enabled, missing, &name);
         }
         for (slot, rect) in &card.slots {
             if let Some(stack) = recipe_stack(game, *index, *slot) {
-                draw_stack(
-                    game,
-                    batch,
-                    &stack,
-                    *rect,
-                    &format!("Recipe {index} ingredient {slot}"),
-                );
+                let name = format!("Recipe {index} ingredient {slot}");
+                draw_stack(game, batch, &stack, *rect, &name, true);
             }
         }
     }
+
+    if let Some(station) = station {
+        paint::station_tab(game, batch, view.catalyst_tab, view.catalyst);
+        draw_stack(game, batch, station, view.catalyst, "Recipe catalyst", true);
+    }
+    for (i, rect) in &view.tabs {
+        paint::tab(game, batch, *rect, *i == page.tab as usize);
+        if let Some(icon) = page.tabs.get(*i) {
+            let [x, y, _, _] = *rect;
+            let name = format!("Recipe category {i}");
+            draw_stack(
+                game,
+                batch,
+                icon,
+                [x + 4.0, y + 4.0, 16.0, 16.0],
+                &name,
+                false,
+            );
+        }
+        horizon_client::widgets::record(&format!("Recipe category {i}"), *rect, true);
+    }
 }
 
-fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, layout: &Layout) {
+fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, items: &Sidebar, layout: &Layout) {
     let pages = game.browser_pages(layout);
     let delta = ITEM_SCROLL.with(|cell| cell.replace(0));
     game.panel.page = (game.panel.page as i64 + i64::from(delta)).rem_euclid(pages as i64) as usize;
@@ -310,204 +465,235 @@ fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, layout: &Layout) {
             break;
         };
         let (x, y) = layout.slot(offset);
-        draw_stack(
-            game,
-            batch,
-            stack,
-            [x, y, SLOT, SLOT],
-            &format!("Item {index}"),
-        );
+        let rect = [x, y, viewer::SLOT, viewer::SLOT];
+        draw_stack(game, batch, stack, rect, &format!("Item {index}"), true);
     }
-    paint::label(
-        game,
-        batch,
-        &format!("{}/{}", game.panel.page + 1, pages),
-        [
-            layout.grid.0 + 20.0,
-            layout.arrows_y + 3.0,
-            layout.width() - 40.0,
-            16.0,
-        ],
-        u32::MAX,
-    );
-    if let Some(rect) = layout.settings {
-        paint::button(game, batch, rect, "...", true, "AEI settings");
+
+    let [back, forward] = items.arrows();
+    let [x, y, w, h] = items.nav;
+    paint::strip(game, batch, [x + back[2], y, w - back[2] - forward[2], h]);
+    let label = format!("{}/{}", game.panel.page + 1, pages);
+    if game.gui.atlas.font.width(&label) <= w - back[2] - forward[2] {
+        paint::title(game, batch, &label, items.nav);
     }
-    let rects = layout.browser_arrow_rects(true);
-    for (i, rect) in rects.into_iter().enumerate() {
-        paint::button(
-            game,
-            batch,
-            rect,
-            if i == 0 { "<" } else { ">" },
-            pages > 1,
-            if i == 0 {
-                "Previous item page"
-            } else {
-                "Next item page"
-            },
-        );
-    }
-    let hint = game.translate("gui.recipebook.search_hint", "Search...");
+    paint::arrow_button(game, batch, back, false, pages > 1, "Previous item page");
+    paint::arrow_button(game, batch, forward, true, pages > 1, "Next item page");
+
+    let unmatched = game.panel.stacks.is_empty();
     let search = game.browser_search(layout);
-    search.suggestion = (search.value.is_empty() && !search.focused).then_some(hint);
+    search.suggestion = None;
+    search.text_color = if unmatched && !search.value.is_empty() {
+        rgba(255, 0, 0, 255)
+    } else {
+        paint::white()
+    };
     let mut search = search.clone();
-    search.draw(batch, &game.gui.atlas, None);
+    search.draw_with_skin(batch, &game.gui.atlas, None, Some(paint::SEARCH_SKIN));
+    game.panel.search = Some(search);
+    paint::settings_button(game, batch, items.settings, "AEI settings");
 }
 
 pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()> {
-    if active(game).is_none() {
+    if owned(game).is_none() {
         return ControlFlow::Continue(());
     }
-    let Some((view, items)) = layouts(game, batch) else {
+    let recipes = game.panel.recipes.is_some();
+    let Some(screen) = screen(game, batch, recipes) else {
         return ControlFlow::Continue(());
     };
-    paint::fill(
-        game,
-        batch,
-        [0.0, 0.0, batch.width, batch.height],
-        rgba(0, 0, 0, 96),
-    );
-    draw_recipes(game, batch, &view);
-    if let Some(items) = &items {
-        draw_items(game, batch, items);
+    let transfers = screen
+        .view
+        .as_ref()
+        .map(|view| transfers(game, view))
+        .unwrap_or_default();
+    if let Some(view) = &screen.view {
+        // The vanilla in-game screen background behind the recipe window.
+        batch.fill_gradient(
+            &game.gui.atlas,
+            (0.0, 0.0, batch.width, batch.height),
+            rgba(16, 16, 16, 0xC0),
+            rgba(16, 16, 16, 0xD0),
+        );
+        draw_recipes(game, batch, view, &transfers);
+    }
+    if let Some((items, layout)) = &screen.items {
+        draw_items(game, batch, items, layout);
     } else if let Some(search) = game.panel.search.as_mut() {
         search.focused = false;
     }
-    let hovered = hovered_recipe(game, &view)
-        .map(|(_, _, stack)| stack)
-        .or_else(|| {
-            items
-                .as_ref()
-                .and_then(|items| hovered_item(game, items))
-                .map(|(_, stack)| stack)
+
+    let cursor = game.cursor;
+    // A category tab names its category; every other icon shows its item.
+    let tab_title = screen.view.as_ref().and_then(|view| {
+        let page = game.panel_shown()?.recipes.as_ref()?;
+        let (i, _) = view
+            .tabs
+            .iter()
+            .find(|(_, rect)| viewer::contains(*rect, cursor))?;
+        Some(category_title(game, &page.tabs.get(*i)?.item))
+    });
+    let hovered = screen
+        .view
+        .as_ref()
+        .filter(|_| tab_title.is_none())
+        .and_then(|view| {
+            hovered_recipe(game, view)
+                .map(|(_, _, stack)| stack)
+                .or_else(|| hovered_station(game, view))
         })
         .or_else(|| {
-            let page = game.panel_shown()?.recipes.as_ref()?;
-            view.tabs
-                .iter()
-                .position(|rect| viewer::contains(*rect, game.cursor))
-                .and_then(|i| page.tabs.get(i).cloned())
-                .or_else(|| {
-                    viewer::contains(view.catalyst, game.cursor)
-                        .then(|| page.tabs.get(page.tab as usize).cloned())
-                        .flatten()
-                })
+            let (_, layout) = screen.items.as_ref()?;
+            hovered_item(game, layout).map(|(_, stack)| stack)
         });
-    if let Some(stack) = hovered.and_then(|sent| super::browser_stack(world_items!(game), &sent)) {
-        game.draw_stack_tooltip(batch, &stack, game.cursor.0, game.cursor.1);
-    } else if game.carried.is_some() {
+    if game.carried.is_some() {
         game.draw_carried(batch);
+    } else if let Some(title) = tab_title {
+        game.draw_tooltip_lines(batch, &[(title, u32::MAX)], cursor.0, cursor.1);
+    } else if let Some((_, transfer)) = screen
+        .view
+        .as_ref()
+        .and_then(|view| hovered_transfer(game, view, &transfers))
+    {
+        let line = (transfer.tooltip().to_owned(), u32::MAX);
+        game.draw_tooltip_lines(batch, &[line], cursor.0, cursor.1);
+    } else if let Some(stack) =
+        hovered.and_then(|sent| super::browser_stack(world_items!(game), &sent))
+    {
+        game.draw_stack_tooltip(batch, &stack, cursor.0, cursor.1);
+    } else if let Some((items, _)) = &screen.items
+        && viewer::contains(items.settings, cursor)
+    {
+        let label = game.translate("options.title", "Options");
+        game.draw_tooltip_lines(batch, &[(label, u32::MAX)], cursor.0, cursor.1);
+    } else if let Some(text) = screen
+        .view
+        .as_ref()
+        .and_then(|view| shapeless_hovered(game, view))
+    {
+        game.draw_tooltip_lines(batch, &[(text, u32::MAX)], cursor.0, cursor.1);
+    } else if screen.view.is_none() {
+        game.draw_slot_tooltip(batch);
     }
     ControlFlow::Break(())
+}
+
+fn shapeless_hovered(game: &Game<'_>, view: &Viewer) -> Option<String> {
+    let page = game.panel_shown()?.recipes.as_ref()?;
+    view.cards
+        .iter()
+        .any(|(i, card)| {
+            page.recipes[*i].note == SHAPELESS_NOTE && viewer::contains(card.shapeless, game.cursor)
+        })
+        .then(|| "Shapeless Recipe".to_owned())
 }
 
 fn turn_page(view: &Viewer, forward: bool) {
     NAVIGATION.with(|cell| {
         if let Some(state) = cell.borrow_mut().as_mut() {
             state.page = if forward {
-                (view.page + 1) % view.pages.len()
+                (view.page + 1) % view.pages
             } else {
-                (view.page + view.pages.len() - 1) % view.pages.len()
+                (view.page + view.pages - 1) % view.pages
             };
         }
     });
 }
 
-pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
-    let Some(owner) = active(game) else {
-        return ControlFlow::Continue(());
-    };
-    let Some(batch) = game.browser_batch() else {
-        return ControlFlow::Continue(());
-    };
-    let Some((view, items)) = layouts(game, &batch) else {
-        return ControlFlow::Continue(());
-    };
-    if let Some(search) = game.panel.search.as_mut() {
-        search.focused = false;
+/// A press on the item list; true when it hit something there.
+fn press_items(
+    game: &mut Game<'_>,
+    owner: &Owner,
+    items: &Sidebar,
+    layout: &Layout,
+    right: bool,
+) -> bool {
+    if viewer::contains(items.settings, game.cursor) {
+        if !right {
+            game.list_native_mods();
+            if let Some(index) = game
+                .settings
+                .mods
+                .installed
+                .iter()
+                .position(|entry| entry.id == crate::game::aei::ID && entry.native.is_some())
+            {
+                game.mod_browser_closed();
+                game.panel.recipes_settings_return = Some(game.screen);
+                game.open_options_at(false, horizon_client::options_ui::Page::NativeMod(index));
+            }
+        }
+        return true;
     }
-    if let Some(items) = &items {
-        if items.settings.is_some_and(|rect| inside(game.cursor, rect)) {
-            if !right {
-                game.list_native_mods();
-                if let Some(index) =
-                    game.settings.mods.installed.iter().position(|entry| {
-                        entry.id == crate::game::aei::ID && entry.native.is_some()
-                    })
-                {
-                    game.mod_browser_closed();
-                    game.panel.recipes_settings_return = Some(game.screen);
-                    game.open_options_at(false, horizon_client::options_ui::Page::NativeMod(index));
-                }
-            }
-            return ControlFlow::Break(true);
+    if inside(game.cursor, items.search) {
+        let shift = game.has_shift_down();
+        let cursor = game.cursor;
+        let mut search = game.browser_search(layout).clone();
+        if right {
+            search.set_value("");
+        } else {
+            search.click(&game.gui.atlas, cursor.0, shift, false);
         }
-        if inside(game.cursor, items.search) {
-            let shift = game.has_shift_down();
-            let cursor = game.cursor;
-            let mut search = game.browser_search(items).clone();
-            if right {
-                search.set_value("");
-            } else {
-                search.click(&game.gui.atlas, cursor.0, shift, false);
-            }
-            search.focused = true;
-            search.reset_blink();
-            game.panel.search = Some(search);
-            if right {
-                game.browser_searched();
-            }
-            return ControlFlow::Break(true);
+        search.focused = true;
+        search.reset_blink();
+        game.panel.search = Some(search);
+        if right {
+            game.browser_searched();
         }
-        let pages = game.browser_pages(items);
-        if let Some(i) = items
-            .browser_arrow_rects(true)
-            .iter()
-            .position(|rect| inside(game.cursor, *rect))
-        {
+        return true;
+    }
+    let pages = game.browser_pages(layout);
+    if let Some(i) = items
+        .arrows()
+        .iter()
+        .position(|rect| viewer::contains(*rect, game.cursor))
+    {
+        if pages > 1 {
             game.panel.page = if i == 1 {
                 (game.panel.page + 1) % pages
             } else {
                 (game.panel.page + pages - 1) % pages
             };
-            return ControlFlow::Break(true);
+            game.audio
+                .play("minecraft:ui.button.click", None, 0.25, 1.0);
         }
-        if let Some((index, _)) = hovered_item(game, items) {
-            game.panel_event(
-                &owner,
-                BrowserEvent::Clicked {
-                    index: index as u32,
-                    right,
-                },
-            );
-            return ControlFlow::Break(true);
-        }
+        return true;
     }
-    if let Some(index) = view
+    if let Some((index, _)) = hovered_item(game, layout) {
+        let event = BrowserEvent::Clicked {
+            index: index as u32,
+            right,
+        };
+        game.panel_event(owner, event);
+        return true;
+    }
+    false
+}
+
+fn press_recipes(game: &mut Game<'_>, owner: &Owner, view: &Viewer, right: bool) {
+    let Some(page) = game.panel_shown().and_then(|shown| shown.recipes.as_ref()) else {
+        return;
+    };
+    let (tabs, tab) = (page.tabs.len(), page.tab as usize);
+    if let Some((index, _)) = view
         .tabs
         .iter()
-        .position(|rect| viewer::contains(*rect, game.cursor))
+        .find(|(_, rect)| viewer::contains(*rect, game.cursor))
     {
-        game.panel_event(&owner, BrowserEvent::Tab(index as u32));
+        game.panel_event(owner, BrowserEvent::Tab(*index as u32));
+        game.audio
+            .play("minecraft:ui.button.click", None, 0.25, 1.0);
     } else if let Some(i) = view
         .category_arrows
         .iter()
         .position(|rect| viewer::contains(*rect, game.cursor))
     {
-        let page = game
-            .panel_shown()
-            .and_then(|shown| shown.recipes.as_ref())
-            .unwrap();
-        let count = page.tabs.len();
-        if count > 1 {
-            let tab = page.tab as usize;
+        if tabs > 1 {
             let tab = if i == 1 {
-                (tab + 1) % count
+                (tab + 1) % tabs
             } else {
-                (tab + count - 1) % count
+                (tab + tabs - 1) % tabs
             };
-            game.panel_event(&owner, BrowserEvent::Tab(tab as u32));
+            game.panel_event(owner, BrowserEvent::Tab(tab as u32));
         }
     } else if viewer::contains(view.category, game.cursor) {
         crate::game::aei_glue::show_category(game);
@@ -516,55 +702,83 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
         .iter()
         .position(|rect| viewer::contains(*rect, game.cursor))
     {
-        turn_page(&view, i == 1);
-    } else if let Some((recipe, slot, stack)) = hovered_recipe(game, &view) {
-        game.panel_event(
-            &owner,
-            BrowserEvent::SlotClicked {
-                recipe: recipe as u32,
-                slot: slot as u32,
-                stack,
-                right,
-            },
-        );
+        if view.pages > 1 {
+            turn_page(view, i == 1);
+        }
+    } else if let Some((recipe, slot, stack)) = hovered_recipe(game, view) {
+        let event = BrowserEvent::SlotClicked {
+            recipe: recipe as u32,
+            slot: slot as u32,
+            stack,
+            right,
+        };
+        game.panel_event(owner, event);
     } else {
-        for (index, card) in &view.cards {
-            if viewer::contains(card.action, game.cursor) {
-                let enabled = game
-                    .panel_shown()
-                    .and_then(|shown| shown.recipes.as_ref())
-                    .and_then(|p| p.recipes.get(*index))
-                    .and_then(|r| r.action)
-                    == Some(true);
-                if enabled {
-                    game.panel_event(&owner, BrowserEvent::Action(*index as u32));
-                }
-                break;
-            }
+        let transfers = transfers(game, view);
+        if let Some((index, transfer)) = hovered_transfer(game, view, &transfers)
+            && transfer != Transfer::Locked
+        {
+            game.panel_event(owner, BrowserEvent::Action(index as u32));
         }
     }
-    ControlFlow::Break(true)
+}
+
+pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
+    let Some(owner) = owned(game) else {
+        return ControlFlow::Continue(());
+    };
+    let Some(batch) = game.browser_batch() else {
+        return ControlFlow::Continue(());
+    };
+    let recipes = game.panel.recipes.is_some();
+    let Some(screen) = screen(game, &batch, recipes) else {
+        return ControlFlow::Continue(());
+    };
+    if let Some(search) = game.panel.search.as_mut() {
+        search.focused = false;
+    }
+    if let Some((items, layout)) = &screen.items
+        && inside(game.cursor, items.area)
+    {
+        press_items(game, &owner, items, layout, right);
+        return ControlFlow::Break(true);
+    }
+    match &screen.view {
+        // The recipe window is modal: every other click is its own.
+        Some(view) => {
+            press_recipes(game, &owner, view, right);
+            ControlFlow::Break(true)
+        }
+        // Over the catalogue, clicks off the list reach the container.
+        None => ControlFlow::Break(false),
+    }
 }
 
 pub(super) fn pointed(game: &mut Game<'_>) -> ControlFlow<Option<BrowserStack>> {
-    if active(game).is_none() {
+    if owned(game).is_none() {
         return ControlFlow::Continue(());
     }
     let Some(batch) = game.browser_batch() else {
         return ControlFlow::Continue(());
     };
-    let Some((view, items)) = layouts(game, &batch) else {
+    let recipes = game.panel.recipes.is_some();
+    let Some(screen) = screen(game, &batch, recipes) else {
         return ControlFlow::Continue(());
     };
-    let stack = hovered_recipe(game, &view)
-        .map(|(_, _, stack)| stack)
-        .or_else(|| {
-            items
-                .as_ref()
-                .and_then(|items| hovered_item(game, items))
-                .map(|(_, stack)| stack)
-        });
-    ControlFlow::Break(stack)
+    if let Some((items, layout)) = &screen.items
+        && inside(game.cursor, items.area)
+    {
+        return ControlFlow::Break(hovered_item(game, layout).map(|(_, stack)| stack));
+    }
+    match &screen.view {
+        Some(view) => ControlFlow::Break(
+            hovered_recipe(game, view)
+                .map(|(_, _, stack)| stack)
+                .or_else(|| hovered_station(game, view)),
+        ),
+        // Over the container itself, Horizon finds the slot's stack.
+        None => ControlFlow::Continue(()),
+    }
 }
 
 fn scroll(game: &Game<'_>, amount: f64) -> bool {
@@ -572,26 +786,33 @@ fn scroll(game: &Game<'_>, amount: f64) -> bool {
         game.screen,
         crate::game::Screen::Inventory | crate::game::Screen::Creative
     ) || game.title.is_some()
-        || game.panel_shown().is_none_or(|shown| {
-            shown.owner.native_id() != crate::game::aei::ID || shown.recipes.is_none()
-        })
+        || game
+            .panel_shown()
+            .is_none_or(|shown| shown.owner.native_id() != crate::game::aei::ID)
     {
         return false;
     }
     let Some(batch) = game.browser_batch() else {
         return false;
     };
-    let Some((view, items)) = layouts(game, &batch) else {
+    let Some(screen) = screen(game, &batch, game.panel.recipes.is_some()) else {
         return false;
     };
-    if amount == 0.0 {
+    let over_items = screen
+        .items
+        .as_ref()
+        .is_some_and(|(items, _)| inside(game.cursor, items.area));
+    if over_items {
+        if amount != 0.0 {
+            ITEM_SCROLL.with(|cell| *cell.borrow_mut() += if amount < 0.0 { 1 } else { -1 });
+        }
         return true;
     }
-    if let Some(items) = items.filter(|items| inside(game.cursor, items.area)) {
-        let _ = items;
-        ITEM_SCROLL.with(|cell| *cell.borrow_mut() += if amount < 0.0 { 1 } else { -1 });
-    } else {
-        turn_page(&view, amount < 0.0);
+    let Some(view) = &screen.view else {
+        return false;
+    };
+    if amount != 0.0 && view.pages > 1 {
+        turn_page(view, amount < 0.0);
     }
     true
 }
@@ -609,53 +830,39 @@ impl Game<'_> {
     pub(in crate::game) fn aei_recipe_scroll(&self, amount: f64) -> bool {
         scroll(self, amount)
     }
-}
 
-impl Game<'_> {
     pub(in crate::game) fn aei_reset_viewer(&self) {
         NAVIGATION.with(|cell| *cell.borrow_mut() = None);
         ITEM_SCROLL.with(|cell| *cell.borrow_mut() = 0);
     }
-}
 
-impl Game<'_> {
+    /// Whether the recipe window covers the container this frame.
     pub(in crate::game) fn aei_recipe_modal(&mut self, batch: &HudBatch) -> bool {
-        active(self).is_some() && layouts(self, batch).is_some()
+        active(self).is_some() && screen(self, batch, true).is_some_and(|s| s.view.is_some())
     }
-}
 
-impl Game<'_> {
     pub(in crate::game) fn aei_recipe_is_modal(&mut self) -> bool {
         self.browser_batch()
             .is_some_and(|batch| self.aei_recipe_modal(&batch))
     }
 
     pub(in crate::game) fn aei_focus_search(&mut self) -> bool {
-        let Some(owner) = self.browser_sync() else {
-            return false;
-        };
-        if owner.native_id() != crate::game::aei::ID {
+        if owned(self).is_none() {
             return false;
         }
         let Some(batch) = self.browser_batch() else {
             return false;
         };
-        let items = if self.panel.recipes.is_some() {
-            layouts(self, &batch).and_then(|(_, items)| items)
-        } else {
-            self.browser_layout(&batch)
-        };
-        let Some(items) = items else {
+        let recipes = self.panel.recipes.is_some();
+        let Some((_, layout)) = screen(self, &batch, recipes).and_then(|s| s.items) else {
             return false;
         };
-        let search = self.browser_search(&items);
+        let search = self.browser_search(&layout);
         search.focused = true;
         search.reset_blink();
         true
     }
-}
 
-impl Game<'_> {
     pub(in crate::game) fn aei_reset_catalogue(&mut self) {
         self.aei_reset_viewer();
         self.panel.search = None;

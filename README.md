@@ -8,24 +8,31 @@ through Horizon's native mod system.
   exclusions (`-`) and alternatives (`|`).
 - Hover an item and press **R** for recipes or **U** for uses. In the catalogue,
   left-click shows recipes and right-click shows uses.
-- Browse a centered recipe viewer with category tabs above the window, a catalyst
-  on the left, category and page navigation, beveled recipe cards, full crafting
-  grids and output slots. The item catalogue remains on the right when it fits.
-- Click ingredients to follow recipes, click the category title to browse
-  recipes from that category, and use **Left/Right** to navigate lookup history.
+- Browse recipes in a JEI-style window: category tabs above it, the crafting
+  station on the left, category and page arrows, recipes on bordered plates with
+  animated furnace and brewing progress, cook time and experience. The item list
+  stays on the right, with page arrows above it and the search field below.
+- Click ingredients to follow recipes, click the category title to browse every
+  recipe (one tab per category), and use **Left/Right** to navigate lookup history.
 - Press **Ctrl+F** to focus the search field.
 - Scroll or click arrows to turn pages. Right-click the search field to clear it.
-- Click **+** to place a known recipe through the vanilla recipe book;
-  **Shift-click** requests as many sets as the player's inventory permits.
+- Click **+** to move a recipe's ingredients into the crafting grid through the
+  vanilla recipe book (**Shift-click** for as many sets as the inventory allows);
+  the recipe view then closes. The button only shows on crafting recipes that fit
+  the open grid (2x2 in the inventory, 3x3 at a crafting table). It is orange
+  when ingredients are missing (the grid shows the recipe as a ghost) and dark
+  when the recipe isn't unlocked in the player's recipe book.
 
 Recipes, stack components, item rendering, fonts and translations come from
 Horizon's native API. Recipe placement remains subject to the player's learned
 recipes and the server's normal recipe-book rules. The vanilla recipe book is
 preserved.
 
-The viewer follows the public [JEI screenshots and control documentation](https://www.curseforge.com/minecraft/mc-mods/jei).
-Its graphics are original drawing primitives; no JEI implementation or assets
-are included. Full JEI feature parity is not claimed: the pinned native contract
+The interface reproduces [JEI](https://www.curseforge.com/minecraft/mc-mods/jei)'s
+layout and controls (see `docs/design.md`). Its graphics are drawing primitives,
+vanilla GUI sprites and the JEI-style sprites Horizon already ships; no JEI
+implementation or assets are included. Bookmarks, cheat mode and the recipe
+sorting toggles are not implemented. Full JEI feature parity is not claimed: the pinned native contract
 provides crafting, cooking, stonecutting, smithing and brewing, but not dynamic
 anvil, grindstone, fuel or compost categories. AEI extends Horizon's creative
 inventory panel guard for its own recipe viewer and leaves the vanilla recipe

@@ -1,6 +1,6 @@
 [mod]
 id = "aei"
-version = "0.1.5"
+version = "0.1.7"
 priority = 100
 
 # Compatibility with the published native hooks used by AEI.
@@ -35,6 +35,12 @@ id = "recipe_paint"
 file = "crates/horizon-client/src/game/native_panel.rs"
 name = "aei_recipe_paint"
 source = "modules/recipe_paint.rs"
+
+[[module]]
+id = "recipe_status"
+file = "crates/horizon-client/src/game/recipe_book.rs"
+name = "aei_recipe_status"
+source = "modules/recipe_status.rs"
 
 [[injection]]
 id = "creative_panel"
