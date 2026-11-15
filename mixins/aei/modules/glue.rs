@@ -582,6 +582,12 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
             index: *index as usize,
             right: *right,
         },
+        NativePanelEvent::Key { key, stack: target }
+            if key == "key.keyboard.c" && game.has_control_down() =>
+        {
+            copy_stack(game, target, game.has_shift_down());
+            return;
+        }
         NativePanelEvent::Key { key, stack: target } => {
             let is_recipe =
                 *key == game.native_mod_key(model::ID, model::KEY_RECIPE[0], model::KEY_RECIPE[2]);
@@ -1004,4 +1010,17 @@ pub(super) fn jump(game: &mut Game<'_>, index: usize) {
     for update in updates {
         publish(game, update);
     }
+}
+
+/// Ctrl+C over an item copies its id; Ctrl+Shift+C a `/give` command for the exact
+/// stack, components included. The action bar says what was copied.
+fn copy_stack(game: &mut Game<'_>, target: &NativeStack, give: bool) {
+    use horizon_client::clipboard::Clipboard;
+    let text = if give {
+        format!("/give @s {}{}", target.item, target.components)
+    } else {
+        target.item.clone()
+    };
+    game.clipboard.set(&text);
+    game.message = Some((format!("Copied {text}"), std::time::Instant::now()));
 }
