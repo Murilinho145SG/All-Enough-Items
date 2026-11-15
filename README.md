@@ -15,7 +15,9 @@ through Horizon's native mod system.
 - Beyond JEI, plain words ignore accents (`maca` finds *Maçã*), also match the
   English name in another language, and forgive one typo in words of four
   letters or more (exact matches come first). Filters narrow the list:
-  `is:food`, `is:block`, `is:enchantable`, `is:tool`, `has:recipe`, `no:recipe`,
+  `is:food`, `is:block`, `is:enchantable`, `is:tool`, `is:craftable` (what one
+  recipe makes from the inventory in the open grid, updated as it changes),
+  `has:recipe`, `no:recipe`,
   `rarity:epic`, and numbers with `stack`, `dur` and `nutrition` (`stack:1`,
   `dur>500`, `nutrition<4`).
 - Press **Ctrl+O** to hide or show the overlay (remembered between sessions).

@@ -327,6 +327,12 @@ pub enum Event {
         len: usize,
     },
     Search(String),
+    /// What the player holds and the open crafting grid's width (2 or 3), for
+    /// `is:craftable`.
+    SetInventory {
+        stacks: Vec<Stack>,
+        grid: u32,
+    },
     SetSearchModes(SearchModes),
     SetSort(SortOrder),
     /// Edit mode shows hidden entries (marked) and makes clicks hide or show them.

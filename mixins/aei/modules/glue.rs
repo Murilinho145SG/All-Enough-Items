@@ -545,6 +545,25 @@ pub(super) fn frame(game: &mut Game<'_>) {
             return Some((true, initial));
         }
         let session = session.as_mut()?;
+        // `is:craftable` follows the inventory and the open grid.
+        let stacks = game
+            .inventory
+            .iter()
+            .flatten()
+            .map(|held| model::Stack {
+                id: held.item.to_string(),
+                count: held.count,
+                components: String::new(),
+            })
+            .collect();
+        let grid = game.craft_size as u32;
+        let changed =
+            session
+                .browser
+                .handle(model::Event::SetInventory { stacks, grid }, false, &known);
+        if let Some(model::Update::ItemList(items)) = changed.into_iter().next() {
+            return Some((false, model::Update::ItemList(items)));
+        }
         if game.aei_panel_missing() {
             // Lost (an empty list published outside a search): start again from the full
             // list, with the search cleared.
@@ -568,7 +587,13 @@ pub(super) fn frame(game: &mut Game<'_>) {
             game.aei_reset_catalogue();
             game.native_panel_recipes(model::ID, "", Vec::new(), 0, Vec::new());
         }
-        publish(game, update);
+        match update {
+            // A search result refreshed by the inventory: an empty one keeps the field.
+            model::Update::ItemList(items) if !reset => {
+                game.aei_show_search_result(items.iter().map(native).collect());
+            }
+            update => publish(game, update),
+        }
     }
 }
 

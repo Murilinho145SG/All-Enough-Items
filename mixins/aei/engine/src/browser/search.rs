@@ -66,6 +66,10 @@ pub(super) struct Indexed {
     tabs: Vec<String>,
     props: EntryProps,
     has_recipe: bool,
+    /// Its registry index, for filters that change with the game (craftable now).
+    pub(super) item: Option<usize>,
+    /// The inventory holds what one of its crafting recipes needs, in the open grid.
+    pub(super) craftable: bool,
 }
 
 /// Lower case without accents, so `pá` finds `pa` and `Ç` finds `c`.
@@ -147,6 +151,8 @@ impl Indexed {
             tabs: entry.tabs.iter().map(|t| fold(t)).collect(),
             props: entry.props.clone(),
             has_recipe,
+            item: None,
+            craftable: false,
         }
     }
 
@@ -187,6 +193,7 @@ impl Indexed {
                 "block" => p.block,
                 "tool" | "damageable" => p.durability > 0,
                 "stackable" => p.max_stack > 1,
+                "craftable" => self.craftable,
                 _ => false,
             },
             Filter::Recipe(wanted) => self.has_recipe == *wanted,
@@ -246,6 +253,14 @@ impl Filter {
 }
 
 impl SearchQuery {
+    /// Whether the query reads `is:craftable`, which changes with the inventory.
+    pub(super) fn reads_inventory(&self) -> bool {
+        self.groups
+            .iter()
+            .flatten()
+            .any(|term| matches!(&term.filter, Some(Filter::Is(what)) if what == "craftable"))
+    }
+
     pub(super) fn parse(query: &str, modes: &SearchModes) -> Self {
         let mut groups = vec![Vec::new()];
         let mut token = String::new();

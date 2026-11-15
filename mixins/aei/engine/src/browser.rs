@@ -11,6 +11,7 @@ pub const RECENT: usize = 9;
 
 mod bookmarks;
 mod categories;
+mod craftable;
 mod history;
 mod listing;
 mod plan;
@@ -39,6 +40,9 @@ pub struct Browser {
     search: SearchQuery,
     /// The items looked up last, newest first.
     recent: Vec<Stack>,
+    /// What the player holds and the open crafting grid's size, for `is:craftable`.
+    inventory: Vec<Stack>,
+    grid: u32,
     /// Earlier searches, oldest first, and the one Up/Down recalled last.
     search_history: Vec<String>,
     history_cursor: Option<usize>,
@@ -127,7 +131,9 @@ impl Browser {
                 let index = self.by_id.get(&entry.stack.id).copied();
                 let item = index.map(|i| &self.items[i]);
                 let has_recipe = index.is_some_and(|i| self.recipe_index.makes(i));
-                Indexed::new(entry, item, has_recipe)
+                let mut indexed = Indexed::new(entry, item, has_recipe);
+                indexed.item = index;
+                indexed
             })
             .collect();
         self.catalogue = catalogue;
@@ -337,6 +343,7 @@ impl Browser {
             self.window.0 = 0;
         }
         match event {
+            Event::SetInventory { stacks, grid } => self.set_inventory(stacks, grid),
             Event::ShowWindow { offset, len } => {
                 if self.history.current().is_none() {
                     return Vec::new();
