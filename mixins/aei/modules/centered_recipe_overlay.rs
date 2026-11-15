@@ -496,6 +496,13 @@ fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, items: &Sidebar, layout
     game.panel.page = (game.panel.page as i64 + i64::from(delta)).rem_euclid(pages as i64) as usize;
     game.panel.page = game.panel.page.min(pages - 1);
     let first = game.panel.page * layout.per_page();
+    if crate::game::aei_glue::cheat_mode() {
+        // JEI's cheat mode tint behind the list.
+        let (x, y) = layout.slot(0);
+        let w = layout.columns as f32 * viewer::SLOT;
+        let h = layout.rows as f32 * viewer::SLOT;
+        paint::fill(game, batch, [x, y, w, h], rgba(255, 0, 0, 0x30));
+    }
     for offset in 0..layout.per_page() {
         let index = first + offset;
         let Some(stack) = game.panel_shown().and_then(|shown| shown.items.get(index)) else {
@@ -711,7 +718,16 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         && viewer::contains(items.settings, cursor)
     {
         let label = game.translate("options.title", "Options");
-        game.draw_tooltip_lines(batch, &[(label, u32::MAX)], cursor.0, cursor.1);
+        let cheat = if crate::game::aei_glue::cheat_mode() {
+            "\u{a7}cCheat mode is on"
+        } else {
+            "\u{a7}7Ctrl+click: cheat mode"
+        };
+        let lines = [
+            (horizon_client::text::Text::legacy(&label), u32::MAX),
+            (horizon_client::text::Text::legacy(cheat), u32::MAX),
+        ];
+        game.draw_tooltip_lines(batch, &lines, cursor.0, cursor.1);
     } else if let Some(text) = screen
         .view
         .as_ref()
@@ -755,7 +771,11 @@ fn press_items(
     right: bool,
 ) -> bool {
     if viewer::contains(items.settings, game.cursor) {
-        if !right {
+        if !right && game.has_control_down() {
+            crate::game::aei_glue::toggle_cheat(game);
+            game.audio
+                .play("minecraft:ui.button.click", None, 0.25, 1.0);
+        } else if !right {
             game.list_native_mods();
             if let Some(index) = game
                 .settings
@@ -895,6 +915,12 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
     if let Some((items, layout)) = &screen.items
         && inside(game.cursor, items.area)
     {
+        // JEI deletes a stack dropped on the list; on the creative screen the cursor's
+        // stack is the client's own, so it can simply go.
+        if game.carried.is_some() && game.screen == crate::game::Screen::Creative {
+            game.carried = None;
+            return ControlFlow::Break(true);
+        }
         press_items(game, &owner, items, layout, right);
         return ControlFlow::Break(true);
     }
@@ -1048,6 +1074,51 @@ impl Game<'_> {
         let search = self.browser_search(&layout);
         search.focused = true;
         search.reset_blink();
+        true
+    }
+
+    /// The pointer is over AEI's item or bookmark list, whose clicks AEI takes: their
+    /// release must not reach the container (it would drop a carried stack).
+    pub(in crate::game) fn aei_over_panels(&mut self) -> bool {
+        if owned(self).is_none() {
+            return false;
+        }
+        let Some(batch) = self.browser_batch() else {
+            return false;
+        };
+        let recipes = self.panel.recipes.is_some();
+        let Some(screen) = screen(self, &batch, recipes) else {
+            return false;
+        };
+        let cursor = self.cursor;
+        screen
+            .items
+            .as_ref()
+            .is_some_and(|(items, _)| inside(cursor, items.area))
+            || screen.bookmarks.as_ref().is_some_and(|list| {
+                list.arrows()
+                    .iter()
+                    .chain(
+                        &(0..list.per_page())
+                            .map(|o| list.slot(o))
+                            .collect::<Vec<_>>(),
+                    )
+                    .any(|rect| viewer::contains(*rect, cursor))
+            })
+    }
+
+    /// Cheat mode on the creative screen: `stack` on the cursor, as picking it from a
+    /// creative tab does. False when something is already carried or the screen is not
+    /// the creative one.
+    pub(in crate::game) fn aei_pick_up(&mut self, stack: &BrowserStack) -> bool {
+        if self.screen != crate::game::Screen::Creative || self.carried.is_some() {
+            return false;
+        }
+        let Some(mut item) = super::browser_stack(world_items!(self), stack) else {
+            return false;
+        };
+        item.count = stack.count;
+        self.carried = Some(item);
         true
     }
 

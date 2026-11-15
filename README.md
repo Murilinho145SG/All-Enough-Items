@@ -33,6 +33,12 @@ through Horizon's native mod system.
   pages, open recipes and uses like the list, and are saved. The ribbon button
   at the top right of each recipe bookmarks that recipe: its output joins the
   list with a gold corner and opens on that recipe.
+- Cheat mode (Ctrl+click the settings button, or the settings page) tints the
+  list red; then clicking an item, bookmark or recipe ingredient gives it, a full
+  stack with the left button and one with the right, as JEI does. In Creative the
+  items go to the inventory (or the cursor, on the creative screen, if set);
+  otherwise AEI sends `/give`, which the server only allows with permission.
+  A stack dropped on the list on the creative screen is deleted.
 - Press **Ctrl+F** to focus the search field.
 - Scroll or click arrows to turn pages. Right-click the search field to clear it.
 - Click **+** to move a recipe's ingredients into the crafting grid through the

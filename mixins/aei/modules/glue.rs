@@ -15,6 +15,7 @@ struct Session {
 /// the panel and tooltip hooks don't read them every frame.
 static HIDDEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static MOD_NAMES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static CHEAT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 std::thread_local! {
     static BROWSER: std::cell::RefCell<Option<Session>> = const { std::cell::RefCell::new(None) };
@@ -238,9 +239,7 @@ fn publish(game: &mut Game<'_>, update: model::Update) {
                 page.cards.iter().map(card).collect(),
             );
         }
-        model::Update::Give { item, count } => {
-            let _ = game.native_give(&item, count);
-        }
+        model::Update::Give { stack, count } => give(game, &stack, count),
         model::Update::PlaceKnownRecipe(id) => {
             match game.native_place_recipe(id, game.has_shift_down()) {
                 Err(message) => game.native_chat(&message),
@@ -385,7 +384,6 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
         _ => return,
     };
 
-    let original_event = event.clone();
     let known = game.native_known_recipes();
     let give_enabled = flag(game, SETTING_GIVE);
     let updates =
@@ -393,17 +391,6 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
     for update in updates {
         if matches!(&update, model::Update::RecipeList(_)) {
             game.aei_reset_viewer();
-        }
-        if let model::Update::Give { item, count } = &update {
-            if game.native_give(item, *count).is_err() {
-                let fallback =
-                    with_browser(|browser| browser.handle(original_event.clone(), false, &known))
-                        .unwrap_or_default();
-                for next in fallback {
-                    publish(game, next);
-                }
-            }
-            continue;
         }
         publish(game, update);
     }
@@ -464,6 +451,7 @@ pub(super) fn navigation(game: &mut Game<'_>, key: &str) -> bool {
 const SETTING_GIVE: &str = "give";
 const SETTING_HIDDEN: &str = "hidden";
 const SETTING_MOD_NAMES: &str = "mod_names";
+const SETTING_CURSOR: &str = "give_cursor";
 
 fn flag(game: &Game<'_>, key: &str) -> bool {
     game.native_setting(model::ID, key).as_deref() == Some("true")
@@ -473,6 +461,40 @@ fn load_flags(game: &Game<'_>) {
     use std::sync::atomic::Ordering::Relaxed;
     HIDDEN.store(flag(game, SETTING_HIDDEN), Relaxed);
     MOD_NAMES.store(flag(game, SETTING_MOD_NAMES), Relaxed);
+    CHEAT.store(flag(game, SETTING_GIVE), Relaxed);
+}
+
+/// Whether cheat mode is on (clicks give items).
+pub(super) fn cheat_mode() -> bool {
+    CHEAT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// JEI's Ctrl+click on the settings button: cheat mode on or off.
+pub(super) fn toggle_cheat(game: &mut Game<'_>) {
+    let on = !flag(game, SETTING_GIVE);
+    game.native_set_setting(model::ID, SETTING_GIVE, if on { "true" } else { "false" });
+    load_flags(game);
+}
+
+/// Cheat mode's give, at most one full stack. A creative player gets it as the creative
+/// inventory hands it out: on the cursor on the creative screen when that setting is on,
+/// else into the inventory. Anyone else sends `/give`, which the server allows only to
+/// players with that permission.
+fn give(game: &mut Game<'_>, stack: &model::Stack, count: u32) {
+    let Some(max) = game.items().get(&stack.id).map(|item| item.max_stack) else {
+        return;
+    };
+    let count = count.clamp(1, max.max(1));
+    if !game.creative {
+        let command = format!("/give @s {}{} {count}", stack.id, stack.components);
+        game.handle_chat_input(&command);
+        return;
+    }
+    let mut native = native(stack);
+    native.count = count;
+    if !(flag(game, SETTING_CURSOR) && game.aei_pick_up(&native)) {
+        game.mod_give(&stack.id, count, &stack.components);
+    }
 }
 
 /// Whether Ctrl+O hid AEI's overlay.
@@ -529,14 +551,14 @@ pub(super) fn settings_labels(game: &Game<'_>) -> Vec<String> {
 
 pub(super) fn settings_click(game: &mut Game<'_>, button: usize) {
     match button {
-        0 | 1 => {
-            let key = [SETTING_GIVE, SETTING_MOD_NAMES][button];
+        0..=2 => {
+            let key = [SETTING_GIVE, SETTING_MOD_NAMES, SETTING_CURSOR][button];
             let on = flag(game, key);
             game.native_set_setting(model::ID, key, if on { "false" } else { "true" });
             load_flags(game);
         }
-        n if n - 2 < model::SearchModes::FIELDS.len() => {
-            let field = n - 2;
+        n if n - 3 < model::SearchModes::FIELDS.len() => {
+            let field = n - 3;
             let mut modes = search_modes(game);
             let next = modes.get(field).next();
             modes.set(field, next);

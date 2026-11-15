@@ -184,6 +184,15 @@ impl Browser {
         Some(self.render_page(known))
     }
 
+    /// JEI's cheat clicks: left gives a full stack, right gives one.
+    fn give(mut stack: Stack, right: bool) -> Update {
+        stack.count = 1;
+        Update::Give {
+            stack,
+            count: if right { 1 } else { 64 },
+        }
+    }
+
     fn push_lookup(&mut self, lookup: Lookup, known: &[i32]) -> Vec<Update> {
         self.history.push(lookup);
         vec![self.render_page(known)]
@@ -223,10 +232,7 @@ impl Browser {
                 };
                 match bookmark.recipe {
                     Some(id) => self.open_recipe(&bookmark.stack, &id, known),
-                    None if give => vec![Update::Give {
-                        item: bookmark.stack.id,
-                        count: if right { 99 } else { 1 },
-                    }],
+                    None if give => vec![Self::give(bookmark.stack, right)],
                     None => self
                         .open_lookup(bookmark.stack, right, known)
                         .into_iter()
@@ -252,12 +258,12 @@ impl Browser {
                 };
                 let stack = self.catalogue[entry].stack.clone();
                 if give {
-                    return vec![Update::Give {
-                        item: stack.id,
-                        count: if right { 99 } else { 1 },
-                    }];
+                    return vec![Self::give(stack, right)];
                 }
                 self.open_lookup(stack, right, known).into_iter().collect()
+            }
+            Event::ClickRecipeIngredient { stack, right } if give => {
+                vec![Self::give(stack, right)]
             }
             Event::Lookup { stack, uses } | Event::ClickRecipeIngredient { stack, right: uses } => {
                 self.open_lookup(stack, uses, known).into_iter().collect()
@@ -638,7 +644,7 @@ mod tests {
             &[],
         );
         assert!(
-            matches!(&given[0], Update::Give { item, count: 1 } if item == "minecraft:oak_planks")
+            matches!(&given[0], Update::Give { stack, count: 64 } if stack.id == "minecraft:oak_planks")
         );
         browser.handle(
             Event::ClickBookmark {
@@ -662,6 +668,41 @@ mod tests {
         assert!(
             matches!(&removed[0], Update::Bookmarks(b) if b.len() == 1 && b[0].recipe.is_some())
         );
+    }
+
+    #[test]
+    fn cheat_clicks_give_a_stack_or_one_and_keep_components() {
+        let (items, recipes) = fixture();
+        let (mut browser, _) = Browser::new(items, recipes);
+        browser.set_catalogue(vec![entry(
+            "minecraft:stick",
+            "Stick",
+            "[custom_name='x']",
+            &[],
+            &[],
+        )]);
+        let click =
+            |b: &mut Browser, right| b.handle(Event::ClickItem { index: 0, right }, true, &[]);
+        assert!(matches!(&click(&mut browser, false)[0],
+            Update::Give { stack, count: 64 } if stack.components == "[custom_name='x']"));
+        assert!(matches!(
+            &click(&mut browser, true)[0],
+            Update::Give { count: 1, .. }
+        ));
+        let ingredient = Stack {
+            id: "minecraft:oak_log".into(),
+            count: 3,
+            components: String::new(),
+        };
+        let given = browser.handle(
+            Event::ClickRecipeIngredient {
+                stack: ingredient,
+                right: true,
+            },
+            true,
+            &[],
+        );
+        assert!(matches!(&given[0], Update::Give { stack, count: 1 } if stack.count == 1));
     }
 
     #[test]

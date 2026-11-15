@@ -274,8 +274,9 @@ pub enum Update {
     Bookmarks(Vec<Bookmark>),
     ItemList(Vec<Stack>),
     RecipeList(RecipePage),
+    /// Cheat mode: give the player `count` of `stack` (at most one full stack).
     Give {
-        item: String,
+        stack: Stack,
         count: u32,
     },
     PlaceKnownRecipe(i32),
