@@ -63,6 +63,9 @@ through Horizon's native mod system.
   use it, its components and its tags. Click a tag to list its items.
 - Beyond JEI, every villager offer you see on a trading screen is kept (per
   instance) as a recipe of a Trading category: the costs, an arrow, the result.
+- For modpack makers, the settings page writes `report.md` in AEI's mod data
+  folder: recipe counts by category, items no recipe makes or uses, and
+  crafting recipes whose ingredients make different results.
 - Two more options beyond JEI, off by default: spoiler-free mode lists only items
   that have been in your inventory or that an unlocked recipe makes, and hides
   recipes you haven't unlocked; newly found items get a gold dot until you look

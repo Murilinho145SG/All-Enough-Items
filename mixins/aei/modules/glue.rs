@@ -913,6 +913,8 @@ fn on_off(on: bool) -> &'static str {
 enum Setting {
     /// An ON/OFF flag: its key and label.
     Flag(&'static str, &'static str),
+    /// Writes the diagnostic report.
+    Report,
     Sort,
     Columns,
     /// The search mode of [`model::SearchModes::FIELDS`]'s field.
@@ -932,6 +934,7 @@ fn settings() -> Vec<Setting> {
         Setting::Flag(SETTING_SPOILER, "Spoiler-free (only items you found)"),
         Setting::Flag(SETTING_NEW, "Mark newly found items"),
         Setting::Flag(SETTING_COUNTS, "Recipe and use counts in tooltips"),
+        Setting::Report,
         Setting::Flag(SETTING_MOD_NAMES, "Mod name in tooltips"),
         Setting::Flag(SETTING_CURSOR, "Cheat items in Creative go to the cursor"),
     ];
@@ -959,6 +962,7 @@ pub(super) fn settings_labels(game: &Game<'_>) -> Vec<String> {
                 };
                 format!("Item list order: {order}")
             }
+            Setting::Report => "Write diagnostic report (report.md)".to_owned(),
             Setting::Columns => format!("Item list columns: at most {}", columns(game)),
             Setting::Search(field) => {
                 let (_, prefix, name) = model::SearchModes::FIELDS[field];
@@ -987,6 +991,13 @@ pub(super) fn settings_click(game: &mut Game<'_>, button: usize) {
                 SETTING_SPOILER => model::Event::SetSpoilerFree(on),
                 _ => return,
             }
+        }
+        Setting::Report => {
+            // Next to AEI's settings, in its mod data folder.
+            if let Some(report) = with_browser(|browser| browser.report()) {
+                game.native_set_setting(model::ID, "report.md", &report);
+            }
+            return;
         }
         Setting::Columns => {
             // 9, 8, ... 4, then 9 again.

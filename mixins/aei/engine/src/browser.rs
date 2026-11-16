@@ -20,6 +20,7 @@ mod history;
 mod listing;
 mod plan;
 mod recipes;
+mod report;
 mod search;
 mod search_history;
 mod trades;
