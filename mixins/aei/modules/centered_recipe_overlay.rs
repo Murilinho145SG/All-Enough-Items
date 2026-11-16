@@ -1282,7 +1282,7 @@ fn draw_details(game: &mut Game<'_>, batch: &mut HudBatch, view: &DetailsView) {
         ly += 11.0;
     }
     if !view.tags.is_empty() {
-        let text = "Tags (click: their items; right-click: recipes taking any):";
+        let text = "Tags (click: items, right-click: uses):";
         batch.text(atlas, text, x + 6.0, ly + 3.0, label_colour, false);
     }
     paint::action_button(game, batch, view.note, "Edit note", true, "Edit note");
@@ -1300,7 +1300,7 @@ fn draw_details(game: &mut Game<'_>, batch: &mut HudBatch, view: &DetailsView) {
             &format!("${tag}"),
             tx + 3.0,
             ty + 2.0,
-            text_colour,
+            u32::MAX,
             false,
         );
         horizon_client::widgets::record(&format!("Tag {tag}"), *rect, true);
