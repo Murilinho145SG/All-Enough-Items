@@ -188,6 +188,50 @@ impl Browser {
         }
         Some(text)
     }
+
+    /// Card `card` as the narrator reads it: "Crafting: 3 Oak Planks and 2 Stick make
+    /// 1 Wooden Pickaxe".
+    pub fn recipe_speech(&self, card: usize) -> Option<String> {
+        let &id = self.shown_recipe_ids.get(card)?;
+        let recipe = &self.recipes[id];
+        let name = |item: usize| self.items.get(item).map_or("?", |i| i.name.as_str());
+        let output = recipe.outputs.first()?;
+        let category = crate::Station::of(recipe.kind)
+            .icon()
+            .trim_start_matches("minecraft:")
+            .replace('_', " ");
+        let mut parts: Vec<(String, u32)> = Vec::new();
+        for (slot, alternatives) in recipe.inputs.iter().enumerate() {
+            let Some(first) = alternatives.first() else {
+                continue;
+            };
+            let label = match self.shown_slot_tag(card, slot) {
+                Some(tag) => format!(
+                    "any {}",
+                    tag.rsplit(':').next().unwrap_or(tag).replace('_', " ")
+                ),
+                None => name(first.item).to_owned(),
+            };
+            match parts.iter_mut().find(|(l, _)| *l == label) {
+                Some((_, n)) => *n += first.count.max(1),
+                None => parts.push((label, first.count.max(1))),
+            }
+        }
+        let inputs: Vec<String> = parts
+            .into_iter()
+            .map(|(label, count)| format!("{count} {label}"))
+            .collect();
+        let inputs = match inputs.as_slice() {
+            [] => String::new(),
+            [only] => only.clone(),
+            [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+        };
+        Some(format!(
+            "{category}: {inputs} make {} {}",
+            output.count.max(1),
+            name(output.item)
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -238,6 +282,10 @@ mod recipe_text_tests {
         assert_eq!(
             browser.recipe_text(0).unwrap(),
             "**Stick \u{d7} 4** (crafting table, `minecraft:stick`)\n- 2 \u{d7} Planks\n"
+        );
+        assert_eq!(
+            browser.recipe_speech(0).unwrap(),
+            "crafting table: 2 Planks make 4 Stick"
         );
     }
 }

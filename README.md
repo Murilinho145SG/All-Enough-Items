@@ -95,7 +95,8 @@ through Horizon's native mod system.
   shows recipes, X uses, B goes back and the right stick turns pages; over an
   AEI entry, View bookmarks it and the left stick click opens the calculator.
 - With the game's narrator on, every item cell AEI draws (list, bookmarks,
-  recipes) is read out by its name and count.
+  recipes) is read out by its name and count, and resting the pointer on a
+  recipe card reads the whole recipe ("crafting table: 2 Planks make 4 Stick").
 - Two more options beyond JEI, off by default: spoiler-free mode lists only items
   that have been in your inventory or that an unlocked recipe makes, and hides
   recipes you haven't unlocked (what you have seen is kept per world, or per

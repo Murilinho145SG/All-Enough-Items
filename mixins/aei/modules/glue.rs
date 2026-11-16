@@ -2177,3 +2177,8 @@ pub(super) fn clear_fresh(game: &mut Game<'_>) {
         publish(game, update);
     }
 }
+
+/// Card `card` as the narrator reads it.
+pub(super) fn recipe_speech(card: usize) -> Option<String> {
+    with_browser(|browser| browser.recipe_speech(card)).flatten()
+}

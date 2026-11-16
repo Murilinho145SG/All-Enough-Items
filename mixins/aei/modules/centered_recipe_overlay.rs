@@ -28,6 +28,9 @@ struct Navigation {
 thread_local! {
     static ITEM_SCROLL: RefCell<i32> = const { RefCell::new(0) };
     static BOOKMARK_PAGE: RefCell<usize> = const { RefCell::new(0) };
+    /// The card the narrator was told about: its words, since when it is under the
+    /// pointer, and whether it was said.
+    static SPOKEN: RefCell<Option<(String, std::time::Instant, bool)>> = const { RefCell::new(None) };
     /// Recipes pinned beside the screen (P over a card): card, station, recipe id.
     static PINNED: RefCell<Vec<(crate::game::aei::RecipeCard, &'static str, String)>> =
         const { RefCell::new(Vec::new()) };
@@ -509,6 +512,27 @@ fn draw_cooking(game: &Game<'_>, batch: &mut HudBatch, card: &viewer::Card, note
     }
 }
 
+/// Says card `card` with the narrator after the pointer rests on it for half a second,
+/// once until it leaves (`say_system_now` stays quiet while the narrator is off).
+fn speak_card(card: usize) {
+    let Some(speech) = crate::game::aei_glue::recipe_speech(card) else {
+        return;
+    };
+    SPOKEN.with(|cell| {
+        let mut state = cell.borrow_mut();
+        let now = std::time::Instant::now();
+        match state.as_mut() {
+            Some((said, since, done)) if *said == speech => {
+                if !*done && now.duration_since(*since).as_millis() >= 500 {
+                    horizon_narrator::say_system_now(&speech);
+                    *done = true;
+                }
+            }
+            _ => *state = Some((speech, now, false)),
+        }
+    });
+}
+
 /// A recipe preview: one card left of the pointer (right of it when there is no
 /// room), drawn as the recipe window draws its cards, without animations.
 fn draw_preview(
@@ -825,6 +849,22 @@ fn draw_recipes(
         }
         if recipe.note == SHAPELESS_NOTE {
             paint::shapeless(game, batch, card.shapeless);
+        }
+        // The narrator reads the whole card (what it takes and what it makes) when
+        // the pointer is over it, not only its slots.
+        horizon_client::widgets::narratable(|| {
+            let title = crate::game::aei_glue::recipe_speech(*index).unwrap_or_default();
+            horizon_client::widgets::Narratable::new(
+                horizon_client::widgets::What::Named {
+                    title,
+                    active: true,
+                },
+                card.area,
+            )
+        });
+        // The narrator reads the card the pointer rests on, once.
+        if viewer::contains(card.area, game.cursor) {
+            speak_card(*index);
         }
         if crate::game::aei_glue::recipe_bookmarkable(*index) {
             let marked = crate::game::aei_glue::recipe_bookmarked(*index);
