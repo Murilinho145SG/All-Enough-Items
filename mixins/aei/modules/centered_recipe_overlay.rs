@@ -2435,11 +2435,13 @@ pub(super) fn back(game: &mut Game<'_>) -> ControlFlow<bool> {
     if owned(game).is_some() && PLAN.with(|cell| cell.borrow_mut().take()).is_some() {
         return ControlFlow::Break(true);
     }
-    let Some(owner) = active(game) else {
+    // Escape leaves the recipes for the inventory, however deep the lookups went
+    // (Backspace steps back one).
+    if active(game).is_none() {
         return ControlFlow::Continue(());
-    };
+    }
     game.mod_browser_closed();
-    game.panel_event(&owner, BrowserEvent::Back);
+    crate::game::aei_glue::close_recipes(game);
     ControlFlow::Break(true)
 }
 

@@ -2200,3 +2200,14 @@ pub(super) fn recipe_speech(card: usize) -> Option<String> {
 pub(super) fn book_inputs(book_id: i32) -> Option<Vec<Vec<String>>> {
     with_browser(|browser| browser.book_inputs(book_id)).flatten()
 }
+
+/// Escape: the recipe view closes for the catalogue, whatever lookups led there.
+pub(super) fn close_recipes(game: &mut Game<'_>) {
+    let known = game.native_known_recipes();
+    let updates = with_browser(|browser| browser.handle(model::Event::Close, false, &known))
+        .unwrap_or_default();
+    game.aei_reset_viewer();
+    for update in updates {
+        publish(game, update);
+    }
+}

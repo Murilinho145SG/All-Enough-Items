@@ -400,6 +400,8 @@ pub enum Event {
     ShowCategory,
     /// The recipes with an input slot that takes any item of this tag.
     TagUses(String),
+    /// Escape: the recipes close and the catalogue shows (Backspace steps back instead).
+    Close,
     Place(usize),
     Back,
     Forward,

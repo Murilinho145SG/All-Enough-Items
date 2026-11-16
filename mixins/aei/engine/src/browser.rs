@@ -372,6 +372,7 @@ impl Browser {
                 | Event::SelectStation(_)
                 | Event::ShowCategory
                 | Event::Back
+                | Event::Close
                 | Event::Forward
                 | Event::JumpHistory(_)
         ) {
@@ -538,6 +539,10 @@ impl Browser {
             },
             Event::Back => {
                 self.history.back();
+                vec![self.render_page(known)]
+            }
+            Event::Close => {
+                self.history.close();
                 vec![self.render_page(known)]
             }
             Event::Forward => {
@@ -1641,5 +1646,33 @@ mod tests {
                 .iter()
                 .all(|update| matches!(update, Update::RecipeList(page) if page.cards.is_empty()))
         );
+    }
+
+    #[test]
+    fn escape_closes_every_lookup_and_forward_reopens_the_last() {
+        let (items, recipes) = fixture();
+        let (mut browser, _) = Browser::new(items, recipes);
+        browser.handle(
+            Event::ClickItem {
+                index: 1,
+                right: false,
+            },
+            false,
+            &[],
+        );
+        browser.handle(
+            Event::ClickItem {
+                index: 1,
+                right: true,
+            },
+            false,
+            &[],
+        );
+        assert!(browser.history.current().is_some());
+        let updates = browser.handle(Event::Close, false, &[]);
+        assert!(browser.history.current().is_none());
+        assert!(!updates.is_empty());
+        browser.handle(Event::Forward, false, &[]);
+        assert!(browser.history.current().is_some());
     }
 }

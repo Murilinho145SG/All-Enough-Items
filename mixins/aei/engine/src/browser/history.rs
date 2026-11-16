@@ -24,6 +24,11 @@ impl History {
         self.cursor = self.entries.len();
     }
 
+    /// Leaves the recipes for the catalogue; the lookups stay for Forward.
+    pub(super) fn close(&mut self) {
+        self.cursor = 0;
+    }
+
     pub(super) fn back(&mut self) {
         self.cursor = self.cursor.saturating_sub(1);
     }

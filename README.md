@@ -53,7 +53,8 @@ through Horizon's native mod system.
   for its uses.
 - Click ingredients to follow recipes, click the category title to browse every
   recipe (one tab per category), and use **Left/Right** (or **Backspace** to go
-  back) to navigate lookup history.
+  back) to navigate lookup history. **Escape**, or the inventory key, closes the
+  recipes however many lookups deep and leaves the inventory open.
 - Beyond JEI, press **T** over an item for the material calculator: the raw
   materials a number of it takes (buttons or the wheel change the count), the
   crafting steps in order and what is left over. It picks crafting, then cooking,

@@ -168,6 +168,17 @@ bindings = [
 ]
 
 [[injection]]
+id = "inventory_key"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::play_keys::Game<'_>::key_pressed"
+helper = "hooks/inventory_key.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "key", ty = "KeyCode", value = "key" },
+]
+
+[[injection]]
 id = "pad_button"
 kind = "HEAD"
 cancellable = true
