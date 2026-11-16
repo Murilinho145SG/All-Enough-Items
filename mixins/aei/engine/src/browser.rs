@@ -6,6 +6,7 @@ pub use details::Details;
 pub use plan::{Plan, PlanMaterial, PlanStep};
 use search::{Indexed, SearchQuery};
 use std::collections::HashMap;
+pub use trades::Trade;
 
 /// Recently looked-up items kept.
 pub const RECENT: usize = 9;
@@ -21,6 +22,7 @@ mod plan;
 mod recipes;
 mod search;
 mod search_history;
+mod trades;
 
 /// State for one open world. Visible lists and action indexes are derived from
 /// this state, so interaction indexes stay aligned with what the panel draws.
@@ -52,6 +54,8 @@ pub struct Browser {
     fresh: std::collections::HashSet<String>,
     known: Vec<i32>,
     spoiler_free: bool,
+    /// Villager trades seen on trading screens (their recipes follow the others).
+    trades: Vec<trades::Trade>,
     /// Earlier searches, oldest first, and the one Up/Down recalled last.
     search_history: Vec<String>,
     history_cursor: Option<usize>,

@@ -233,6 +233,7 @@ impl Browser {
             RecipeKind::Compost => (Layout::Single, 1, 1, compost_note(recipe.experience)),
             RecipeKind::Smithing => (Layout::Smithing, 3, 1, String::new()),
             RecipeKind::Anvil => (Layout::Smithing, 2, 1, anvil_note(recipe.ticks)),
+            RecipeKind::Trade => (Layout::Smithing, 2, 1, String::new()),
             RecipeKind::Brewing => (Layout::Brewing, 2, 1, String::new()),
         };
         let place_enabled = (recipe.book_id >= 0).then(|| known.contains(&recipe.book_id));

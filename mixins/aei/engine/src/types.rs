@@ -15,6 +15,8 @@ pub enum RecipeKind {
     Compost,
     /// An anvil combination (repair or enchanted book): `ticks` holds its level cost.
     Anvil,
+    /// A villager trade the player has seen.
+    Trade,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,10 +32,11 @@ pub(crate) enum Station {
     Fuel,
     Compost,
     Anvil,
+    Trade,
 }
 
 impl Station {
-    pub(crate) const ALL: [Self; 11] = [
+    pub(crate) const ALL: [Self; 12] = [
         Self::Crafting,
         Self::Smelting,
         Self::Blasting,
@@ -45,6 +48,7 @@ impl Station {
         Self::Brewing,
         Self::Fuel,
         Self::Compost,
+        Self::Trade,
     ];
 
     pub(crate) fn of(kind: RecipeKind) -> Self {
@@ -60,6 +64,7 @@ impl Station {
             RecipeKind::Fuel => Self::Fuel,
             RecipeKind::Compost => Self::Compost,
             RecipeKind::Anvil => Self::Anvil,
+            RecipeKind::Trade => Self::Trade,
         }
     }
 
@@ -76,6 +81,7 @@ impl Station {
             Self::Fuel => "minecraft:coal",
             Self::Compost => "minecraft:composter",
             Self::Anvil => "minecraft:anvil",
+            Self::Trade => "minecraft:emerald",
         }
     }
 }

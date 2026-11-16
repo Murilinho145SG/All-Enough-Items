@@ -360,6 +360,7 @@ fn category_title(game: &Game<'_>, station: &str) -> String {
         "minecraft:coal" => "Fuel".into(),
         "minecraft:composter" => "Compostable".into(),
         "minecraft:anvil" => "Anvil".into(),
+        "minecraft:emerald" => "Trading".into(),
         _ => "Brewing".into(),
     }
 }

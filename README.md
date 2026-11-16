@@ -61,6 +61,8 @@ through Horizon's native mod system.
 - Beyond JEI, press **I** over an item for its details: id, mod, English name,
   stack size, durability, food, rarity, creative tabs, how many recipes make and
   use it, its components and its tags. Click a tag to list its items.
+- Beyond JEI, every villager offer you see on a trading screen is kept (per
+  instance) as a recipe of a Trading category: the costs, an arrow, the result.
 - Two more options beyond JEI, off by default: spoiler-free mode lists only items
   that have been in your inventory or that an unlocked recipe makes, and hides
   recipes you haven't unlocked; newly found items get a gold dot until you look

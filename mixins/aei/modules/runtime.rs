@@ -14,4 +14,4 @@ pub use aei_engine::{
     Browser, Entry, EntryProps, Event, Ingredient, ItemInfo, Layout, Recipe, RecipeCard,
     RecipeKind, SearchMode, SearchModes, SortOrder, Stack, Update,
 };
-pub use aei_engine::{Details, NOTE_SEPARATOR, Plan, SHAPELESS_NOTE, mod_name, viewer};
+pub use aei_engine::{Details, NOTE_SEPARATOR, Plan, SHAPELESS_NOTE, Trade, mod_name, viewer};

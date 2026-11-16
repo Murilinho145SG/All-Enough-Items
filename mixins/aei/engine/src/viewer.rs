@@ -67,7 +67,10 @@ impl Category {
                 "minecraft:composter" => Self::Compost,
                 _ => Self::Stonecutting,
             },
-            Layout::Smithing if station == "minecraft:anvil" => Self::Anvil,
+            // Trades show as the anvil does: two costs, an arrow, the result.
+            Layout::Smithing if station == "minecraft:anvil" || station == "minecraft:emerald" => {
+                Self::Anvil
+            }
             Layout::Smithing => Self::Smithing,
             Layout::Brewing => Self::Brewing,
         }

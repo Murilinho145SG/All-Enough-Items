@@ -527,6 +527,10 @@ pub(super) fn frame(game: &mut Game<'_>) {
                 .native_setting(model::ID, SETTING_SEEN)
                 .unwrap_or_default();
             browser.load_seen(&seen);
+            let trades = game
+                .native_setting(model::ID, SETTING_TRADES)
+                .unwrap_or_default();
+            browser.load_trades(&trades);
             browser.handle(model::Event::SetKnown(known.to_vec()), false, &[]);
             browser.handle(
                 model::Event::SetSpoilerFree(flag(game, SETTING_SPOILER)),
@@ -578,6 +582,27 @@ pub(super) fn frame(game: &mut Game<'_>) {
             session
                 .browser
                 .handle(model::Event::SetInventory { stacks, grid }, false, &known);
+        // Offers on an open trading screen are remembered as Trading recipes.
+        if let Some(merchant) = game.station.as_ref().and_then(|s| s.merchant.as_ref()) {
+            let stack = |s: &horizon_client::items::ItemStack| model::Stack {
+                id: s.item.to_string(),
+                count: s.count,
+                components: super::native_recipes::components(s),
+            };
+            let trades: Vec<model::Trade> = merchant
+                .session
+                .offers
+                .iter()
+                .map(|offer| model::Trade {
+                    cost: stack(&offer.base_cost_a.stack),
+                    cost_b: offer.cost_b.as_ref().map(|c| stack(&c.stack)),
+                    result: stack(&offer.result),
+                })
+                .collect();
+            if session.browser.add_trades(&trades) {
+                game.native_set_setting(model::ID, SETTING_TRADES, &session.browser.trades_text());
+            }
+        }
         let seen = session.browser.seen_text();
         if SAVED_SEEN.with(|saved| *saved.borrow() != seen) {
             game.native_set_setting(model::ID, SETTING_SEEN, &seen);
@@ -784,6 +809,7 @@ const SETTING_ASSIST: &str = "assisted_crafting";
 const SETTING_SPOILER: &str = "spoiler_free";
 const SETTING_NEW: &str = "mark_new";
 const SETTING_SEEN: &str = "seen_items";
+const SETTING_TRADES: &str = "trades";
 const SETTING_RECENT_ITEMS: &str = "recent_items";
 
 fn flag(game: &Game<'_>, key: &str) -> bool {
