@@ -981,6 +981,7 @@ fn clear(game: &mut Game<'_>) {
 }
 
 pub(super) fn frame(game: &mut Game<'_>) {
+    game.aei_finish_export();
     if !game.native_on(model::ID) {
         clear(game);
         return;

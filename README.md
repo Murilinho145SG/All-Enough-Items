@@ -141,7 +141,8 @@ through Horizon's native mod system.
 - Over any item, **Ctrl+C** copies its id and **Ctrl+Shift+C** a `/give`
   command for that exact stack, components included. Over a recipe card (off
   its slots), Ctrl+C copies the recipe as Markdown: result, category, id and
-  ingredients counted.
+  ingredients counted, and Ctrl+Shift+C saves the card as a PNG image in AEI's
+  folder (`horizon-mods/.horizon-mod-data/aei/recipes/<recipe id>.png`).
 - Press **Ctrl+F** to focus the search field. While typing, **Up** and **Down**
   recall earlier searches (kept when you press Enter or open an item from them).
 - Scroll or click arrows to turn pages. Right-click the search field to clear it.

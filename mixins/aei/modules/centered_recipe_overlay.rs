@@ -31,6 +31,8 @@ thread_local! {
     /// The card the narrator was told about: its words, since when it is under the
     /// pointer, and whether it was said.
     static SPOKEN: RefCell<Option<(String, std::time::Instant, bool)>> = const { RefCell::new(None) };
+    /// A recipe image being taken (Ctrl+Shift+C over a card).
+    static EXPORT: RefCell<Option<Export>> = const { RefCell::new(None) };
     /// Recipes pinned beside the screen (P over a card): card, station, recipe id.
     static PINNED: RefCell<Vec<(crate::game::aei::RecipeCard, &'static str, String)>> =
         const { RefCell::new(Vec::new()) };
@@ -64,6 +66,17 @@ struct Screen {
     recent: Vec<(BrowserStack, viewer::Rect)>,
     /// Saved searches (chips) under the bookmarks, and the chip that pins the search.
     chips: Vec<(Chip, viewer::Rect)>,
+}
+
+/// A recipe image being taken: the screenshot's file, the image's, the card (GUI
+/// pixels), the GUI's width then and when it was asked for.
+#[derive(Clone, Debug)]
+struct Export {
+    capture: std::path::PathBuf,
+    out: std::path::PathBuf,
+    area: viewer::Rect,
+    gui_width: f32,
+    since: std::time::Instant,
 }
 
 /// A saved-search chip.
@@ -2748,6 +2761,110 @@ impl Game<'_> {
             let on_slot = card.slots.iter().any(|(_, r)| viewer::contains(*r, cursor));
             (viewer::contains(card.area, cursor) && !on_slot).then_some(*i)
         })
+    }
+
+    /// Ctrl+Shift+C over a recipe card: saves the card as a PNG in AEI's folder
+    /// (`recipes/<recipe id>.png`), cut from a screenshot of the next frame.
+    pub(in crate::game) fn aei_export_card(&mut self, card: usize) -> bool {
+        let Some(batch) = self.browser_batch() else {
+            return false;
+        };
+        if active(self).is_none() {
+            return false;
+        }
+        let Some(view) = screen(self, &batch, true).and_then(|s| s.view) else {
+            return false;
+        };
+        let Some((_, area)) = view
+            .cards
+            .iter()
+            .find(|(i, _)| *i == card)
+            .map(|(i, c)| (*i, c.area))
+        else {
+            return false;
+        };
+        let dir = self.native_data_dir(crate::game::aei::ID);
+        let name = crate::game::aei_glue::shown_card(card)
+            .map(|(_, _, id)| id)
+            .filter(|id| !id.is_empty())
+            .unwrap_or_else(|| "recipe".to_owned())
+            .replace([':', '/', '\\', '#'], "_");
+        let capture = dir.join(".capture.png");
+        let _ = std::fs::remove_file(&capture);
+        let Some(renderer) = self.renderer.as_mut() else {
+            return false;
+        };
+        renderer.screenshot = Some(horizon_client::gfx::ScreenshotRequest {
+            path: capture.clone(),
+            size: None,
+            scaled: false,
+        });
+        EXPORT.with(|cell| {
+            *cell.borrow_mut() = Some(Export {
+                capture,
+                out: dir.join("recipes").join(format!("{name}.png")),
+                area,
+                gui_width: batch.width,
+                since: std::time::Instant::now(),
+            })
+        });
+        true
+    }
+
+    /// Each frame: once the screenshot asked for by `aei_export_card` is written, cuts
+    /// the card out of it.
+    pub(in crate::game) fn aei_finish_export(&mut self) {
+        let Some(job) = EXPORT.with(|cell| cell.borrow().clone()) else {
+            return;
+        };
+        let done = |game: &mut Game<'_>, text: String| {
+            EXPORT.with(|cell| *cell.borrow_mut() = None);
+            let _ = std::fs::remove_file(&job.capture);
+            game.message = Some((text, std::time::Instant::now()));
+        };
+        let Ok((w, h, rgba)) = horizon_client::hud::decode(&job.capture) else {
+            if job.since.elapsed().as_secs() > 5 {
+                done(self, "The recipe image couldn't be taken".to_owned());
+            }
+            return;
+        };
+        // The screenshot is in window pixels; the card in GUI pixels.
+        let scale = w as f32 / job.gui_width.max(1.0);
+        let [x, y, cw, ch] = job.area.map(|v| (v * scale).round() as i64);
+        let (x0, y0) = (x.clamp(0, w as i64) as u32, y.clamp(0, h as i64) as u32);
+        let (x1, y1) = (
+            (x + cw).clamp(0, w as i64) as u32,
+            (y + ch).clamp(0, h as i64) as u32,
+        );
+        if x1 <= x0 || y1 <= y0 {
+            done(self, "The recipe image couldn't be taken".to_owned());
+            return;
+        }
+        let mut cut = Vec::with_capacity(((x1 - x0) * (y1 - y0) * 4) as usize);
+        for row in y0..y1 {
+            let from = ((row * w + x0) * 4) as usize;
+            let to = ((row * w + x1) * 4) as usize;
+            cut.extend_from_slice(&rgba[from..to]);
+        }
+        let written = job
+            .out
+            .parent()
+            .map(std::fs::create_dir_all)
+            .transpose()
+            .ok()
+            .and_then(|_| std::fs::File::create(&job.out).ok())
+            .and_then(|file| {
+                let mut encoder =
+                    png::Encoder::new(std::io::BufWriter::new(file), x1 - x0, y1 - y0);
+                encoder.set_color(png::ColorType::Rgba);
+                encoder.set_depth(png::BitDepth::Eight);
+                encoder.write_header().ok()?.write_image_data(&cut).ok()
+            });
+        let text = match written {
+            Some(()) => format!("Saved the recipe image to {}", job.out.display()),
+            None => "The recipe image couldn't be saved".to_owned(),
+        };
+        done(self, text);
     }
 
     /// Puts `text` in AEI's search field and searches it, as typing would.

@@ -11,6 +11,17 @@ fn aei_history_key(game: &mut crate::game::Game<'_>, key: &str) -> std::ops::Con
     if game.title.is_none() && game.aei_list_key(key) {
         return std::ops::ControlFlow::Break(());
     }
+    // Ctrl+Shift+C over a card saves it as a PNG; Ctrl+C copies it as Markdown.
+    if game.title.is_none()
+        && key == "key.keyboard.c"
+        && game.has_control_down()
+        && game.has_shift_down()
+        && !game.mod_browser_typing()
+        && let Some(card) = game.aei_hovered_card()
+        && game.aei_export_card(card)
+    {
+        return std::ops::ControlFlow::Break(());
+    }
     if game.title.is_none()
         && key == "key.keyboard.c"
         && game.has_control_down()
