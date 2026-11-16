@@ -1,187 +1,241 @@
 # All Enough Items
 
-All Enough Items (AEI) is a client-side item and recipe browser, distributed
-through Horizon's native mod system.
+All Enough Items (AEI) is a client-side item and recipe browser for
+[Horizon](https://github.com/horizon-rust/horizon), distributed through
+Horizon's native mod system. It brings
+[JEI](https://www.curseforge.com/minecraft/mc-mods/jei)'s layout and controls to
+Horizon, and adds a material calculator, loot and fluid categories, notes,
+collections and more.
 
-- The item list is the creative inventory's, in its tab order, with every
-  variant it lists (enchanted books, potions, tipped arrows...), then any other
-  registered item.
-- Search with JEI's prefixes: names (plain words), mods (`@minecraft`), tooltip
-  lines (`#sharpness`), tags (`$logs`), creative tabs (`%food`) and identifiers
-  (`&minecraft:oak_log`). Combine terms, quoted phrases, exclusions (`-`) and
-  alternatives (`|`). The settings page sets each prefix to *Enabled* (plain
-  words search it too), *Require prefix* or *Disabled*; tooltips and identifiers
-  are searched by plain words by default.
-- Beyond JEI, plain words ignore accents (`maca` finds *Maçã*), also match the
-  English name in another language, and forgive one typo in words of four
-  letters or more (exact matches come first). Filters narrow the list:
-  `is:food`, `is:block`, `is:enchantable`, `is:tool`, `is:craftable` (what one
-  recipe makes from the inventory in the open grid, updated as it changes),
-  `is:craftable2` (the same after one intermediate craft, such as planks
-  first), `is:locked` (what a recipe-book recipe you haven't unlocked makes),
-  `has:recipe`, `no:recipe`,
-  `rarity:epic`, and numbers with `stack`, `dur` and `nutrition` (`stack:1`,
-  `dur>500`, `nutrition<4`). Between slashes a term is a regular expression
-  (`/^oak/`, `&/_log$/`, `"/^oak \w+s$/"` quoted for spaces): `.`, classes,
-  `\d \w \s`, anchors, groups, `|` and repeats, ignoring case.
-- Press **Ctrl+O** to hide or show the overlay (remembered between sessions).
-- The settings page orders the list by creative tabs (the default), mod or name,
-  and has JEI's edit mode: while it is on, clicking an entry hides it (Ctrl+click
-  hides every stack of that item); hidden entries show shaded red until edit mode
-  is off, then leave the list. The hidden list is saved. It also limits the
-  list's columns and can move the search bar under the screen, as JEI's options do.
-- An optional setting adds the item's mod name to every item tooltip, in blue
-  italics as JEI does (off by default, since it changes vanilla tooltips).
-- Hover an item and press **R** for recipes or **U** for uses (also over
-  inventory slots and the vanilla recipe book's buttons). Beyond JEI, R and U
-  aimed at a block or an entity in the world open the inventory on its item (an
-  entity's pick-block item: a mob's spawn egg, whose uses are its drops, a boat,
-  a minecart). In the catalogue,
-  left-click shows recipes and right-click shows uses.
-- Browse recipes in a JEI-style window: category tabs above it, the crafting
-  station on the left, category and page arrows, recipes on bordered plates with
-  animated furnace and brewing progress, cook time and experience. The item list
-  stays on the right, with page arrows above it and the search field below.
-- Recipe categories follow the order in the `categories` file of AEI's mod data
-  folder (`horizon-mods/.horizon-mod-data/aei/`), which AEI writes with every
-  category on first use, like JEI's category order configuration: move lines to
-  reorder the tabs, or put `!` before one to hide that category.
-- A category tab's tooltip also says how many of its recipe-book recipes the
-  player has unlocked (beyond JEI).
-- The category's catalysts (crafting table and crafter, both campfires, ...)
+![The inventory with AEI's item list on the right and bookmarks on the left](docs/images/overview.png)
+
+- [Features](#features)
+  - [Item list and search](#item-list-and-search)
+  - [Recipes](#recipes)
+  - [Bookmarks](#bookmarks)
+  - [Beyond JEI](#beyond-jei)
+- [Controls](#controls)
+- [Options](#options)
+- [Install](#install)
+- [Develop and verify](#develop-and-verify)
+- [Release](#release)
+- [Structure](#structure)
+
+## Features
+
+### Item list and search
+
+The item list is the creative inventory's, in its tab order, with every variant
+it lists (enchanted books, potions, tipped arrows...), then any other registered
+item. Water and lava follow the items as fluids, as JEI lists them.
+
+![Searching the logs tag](docs/images/search.png)
+
+Search with JEI's prefixes:
+
+| Prefix | Searches | Example |
+|---|---|---|
+| none | names | `oak` |
+| `@` | mods | `@minecraft` |
+| `#` | tooltip lines | `#sharpness` |
+| `$` | tags | `$logs` |
+| `%` | creative tabs | `%food` |
+| `&` | identifiers | `&minecraft:oak_log` |
+
+Combine terms, quoted phrases, exclusions (`-`) and alternatives (`|`). The
+settings page sets each prefix to *Enabled* (plain words search it too),
+*Require prefix* or *Disabled*; tooltips and identifiers are searched by plain
+words by default.
+
+Beyond JEI:
+
+- Plain words ignore accents (`maca` finds *Maçã*), also match the English name
+  in another language, and forgive one typo in words of four letters or more
+  (exact matches come first).
+- Filters narrow the list:
+
+  | Filter | Keeps |
+  |---|---|
+  | `is:food`, `is:block`, `is:enchantable`, `is:tool`, `is:stackable` | items of that kind |
+  | `is:craftable` | what one recipe makes from the inventory in the open grid, updated as it changes |
+  | `is:craftable2` | the same after one intermediate craft (planks first, then sticks) |
+  | `is:locked` | what a recipe-book recipe you haven't unlocked makes |
+  | `is:new` | items new to you (with the new-items option) |
+  | `has:recipe`, `no:recipe` | items some recipe makes, or none does |
+  | `rarity:epic` | items of that rarity |
+  | `stack:1`, `dur>500`, `nutrition<4` | numbers compared with `<`, `>`, `=` or `:` |
+
+- Between slashes a term is a regular expression, ignoring case: `/^oak/`,
+  `&/_log$/`, or `"/^oak \w+s$/"` quoted for spaces. It supports `.`, classes,
+  `\d \w \s`, anchors, groups, `|` and repeats.
+- **Up** and **Down** in the search field recall earlier searches. A typed
+  search can be pinned as a chip under the bookmarks with **+ Pin search**
+  (eight at most): click a chip to search it again, right-click it to forget it.
+
+The settings page orders the list by creative tabs (the default), mod or name,
+limits its columns, can move the search bar under the screen, and has JEI's edit
+mode: while it is on, clicking an entry hides it (Ctrl+click hides every stack
+of that item); hidden entries show shaded red until edit mode is off, then leave
+the list. The hidden list is saved.
+
+### Recipes
+
+![A diamond pickaxe's recipe, with the lookup trail above the tabs](docs/images/recipes.png)
+
+- Hover any item and press **R** for its recipes or **U** for its uses: in the
+  list, in a recipe, in any slot of any screen (the creative tabs' grid
+  included) and over the vanilla recipe book's buttons. In the list, left-click
+  shows recipes and right-click shows uses.
+- Recipes open in a JEI-style window: category tabs above it, the crafting
+  station on the left, category and page arrows, and recipes on bordered plates
+  with animated furnace and brewing progress, cook time and experience.
+- The category's catalysts (crafting table and crafter, both campfires...)
   stand in a column left of the window; click one for its recipes, right-click
   for its uses.
-- Click ingredients to follow recipes, click the category title to browse every
-  recipe (one tab per category), and use **Left/Right** (or **Backspace** to go
-  back) to navigate lookup history. **Escape**, or the inventory key, closes the
-  recipes however many lookups deep and leaves the inventory open.
-- Beyond JEI, press **T** over an item for the material calculator: the raw
-  materials a number of it takes (buttons or the wheel change the count), the
-  crafting steps in order and what is left over. It picks crafting, then cooking,
-  never unpacks storage blocks, avoids loops, and counts what the inventory
-  already holds first (short materials are red). Escape closes it; clicking an
-  entry opens its recipes or uses, and Shift+clicking a step makes it with its
-  next usable recipe instead. While it is open, **T** over another item
-  adds it to a shopping list whose materials are summed; click a target to
-  change its count, right-click it to remove it. An option (off by default)
-  adds a **Next step** button that puts the first step the inventory can craft
-  now into the open grid through the vanilla recipe book, one craft per click.
-- Beyond JEI, press **I** over an item for its details: id, mod, English name,
-  stack size, durability, food, rarity, creative tabs, how many recipes make and
-  use it, its components and its tags. Click a tag to list its items, or
-  right-click it for the recipes that take any of them. Its
-  **Edit note** button lets you type a note for the item in the search field
-  (Enter saves it, Escape cancels); the note shows in the details from then on.
-- Water and lava are listed after the items, as JEI lists fluids; cheat mode
-  gives their bucket. Beyond JEI, a Fluids category shows them at work: buckets
-  and bottles filled, concrete powder set, water meeting lava. (Their icons use
-  Horizon's single per-game mod image, so another native mod drawing its own
-  image would replace them.)
-- Beyond JEI, loot categories read the game's loot tables: Block Drops (what
-  breaking a block gives besides itself), Mob Drops (each mob as its spawn egg)
-  and Loot (chests, barrels, archaeology, fishing, bartering, shearing), one card
-  per item, with the table named in the slot tooltips.
-- Beyond JEI, every villager offer you see on a trading screen is kept (per
-  instance) as a recipe of a Trading category: the costs, an arrow, the result.
-- For modpack makers, the settings page writes `report.md` in AEI's mod data
-  folder: recipe counts by category, items no recipe makes or uses, and
-  crafting recipes whose ingredients make different results.
-- Beyond JEI, a typed search can be pinned as a chip under the bookmarks with
-  its "+ Pin search" chip (eight at most): click a chip to search it again,
-  right-click it to forget it.
-- Beyond JEI, **Tab** puts a keyboard focus on the item list (search field
-  unfocused): the arrows move it across pages, Enter opens the focused item's
-  recipes and R, U, A, T and I act on it; Escape leaves it.
-- With a controller, Horizon's inventory pointer hops between AEI's cells: A
-  shows recipes, X uses, B goes back and the right stick turns pages; over an
-  AEI entry, View bookmarks it and the left stick click opens the calculator.
-- With the game's narrator on, every item cell AEI draws (list, bookmarks,
-  recipes) is read out by its name and count, and resting the pointer on a
-  recipe card reads the whole recipe ("crafting table: 2 Planks make 4 Stick").
-- Two more options beyond JEI, off by default: spoiler-free mode lists only items
-  that have been in your inventory or that an unlocked recipe makes, and hides
-  recipes you haven't unlocked (what you have seen is kept per world, or per
-  server); newly found items, and what newly unlocked recipes make, get a gold
-  dot until you look them up: a "New (N)" chip lists them (`is:new`), and
-  right-clicking it marks them all as seen. A third adds each item's recipe and use counts
-  to its tooltip, a fourth dims the container's items a typed search leaves
-  out (on the creative screen, the player's own slots), and a fifth folds an item's variants (enchanted books, potions) into one
-  entry marked "+": Shift+click it to unfold them, and again to fold them. A
-  dark theme darkens AEI's own windows, slots and tabs (a high-contrast one
-  draws them black with white edges and text, and a compact list uses 16-px
-  cells to fit more items), another shows an item's
-  first recipe next to the pointer while Shift is held over it, and another
-  keeps the calculator's shopping list on the HUD while you play (close the
-  inventory with the calculator open): what it still lacks after the inventory.
-- An optional row at the bottom left holds the nine items looked up last (off by
-  default; saved per instance).
-- Beyond JEI, the last ten lookups line up above the category tabs as a
-  breadcrumb trail (the shown one framed in gold): click one to go back to it.
-- Beyond JEI, **P** over a recipe card pins it at the bottom left of the screen
-  (two at most) so it stays in view while you browse, and in later sessions;
-  P over a pinned one unpins it.
-- Ingredients with alternatives cycle every second; hold **Shift** to pause them.
-  A slot whose alternatives are exactly a tag says so in its tooltip ("Accepts
-  any: #minecraft:planks"), and with advanced tooltips (F3+H) an output shows its
-  recipe id.
+- Click ingredients to follow them. The last ten lookups line up above the tabs
+  as a trail: the shown one lit, the ones after it dimmed, a blue corner on the
+  lookups that show uses. Click one to go back to it.
+- Ingredients with alternatives cycle every second; hold **Shift** to pause
+  them. A slot whose alternatives are exactly a tag says so in its tooltip
+  ("Accepts any: #minecraft:planks"), and with advanced tooltips (F3+H) an
+  output shows its recipe id.
+- Click **+** to move a recipe's ingredients into the open screen
+  (**Shift-click** for as many sets as the inventory allows). Crafting recipes
+  go through the vanilla recipe book into a grid they fit (2x2 in the
+  inventory, 3x3 at a crafting table). Smelting, blasting and smoking recipes go
+  into their furnace with ordinary container clicks: one item, or every stack of
+  it with Shift. The button is orange when ingredients are missing (the grid
+  shows a ghost recipe) and dark when the recipe isn't unlocked.
+- Click the category title to browse every recipe, one tab per category.
+  Categories follow the `categories` file in AEI's mod data folder
+  (`horizon-mods/.horizon-mod-data/aei/`), written with every category on first
+  use: move lines to reorder the tabs, or put `!` before one to hide it.
+- A category tab's tooltip says how many of its recipe-book recipes you have
+  unlocked and lists the first ones still locked.
+- Categories: crafting, smelting, blasting, smoking, campfire, stonecutting,
+  smithing, brewing, anvil, fuel and compostable, as JEI has them, and beyond
+  JEI fluids, block drops, mob drops, loot and trading.
+
+### Bookmarks
+
 - Press **A** over any item (the list, a recipe, an inventory slot) to bookmark
-  it, as in JEI; bookmarks line up on the left of the screen with their own
+  it, as in JEI. Bookmarks line up on the left of the screen with their own
   pages, open recipes and uses like the list, and are saved. Drag one onto
-  another to reorder them. Beyond JEI, click the bookmark bar's label to switch
-  between three separate bookmark lists (collections); right-click it to name
-  the shown list, and press Ctrl+C or Ctrl+V over it to copy the list as text
-  or replace it with one from the clipboard (plain item ids work too). The ribbon button
-  at the top right of each recipe bookmarks that recipe: its output joins the
-  list with a gold corner and opens on that recipe.
-- Cheat mode (Ctrl+click the settings button, or the settings page) tints the
-  list red; then clicking an item, bookmark or recipe ingredient gives it, a full
-  stack with the left button and one with the right, as JEI does. In Creative the
-  items go to the inventory (or the cursor, on the creative screen, if set);
-  otherwise AEI sends `/give`, which the server only allows with permission.
-  A stack dropped on the list on the creative screen is deleted.
-- Over any item, **Ctrl+C** copies its id and **Ctrl+Shift+C** a `/give`
-  command for that exact stack, components included. Over a recipe card (off
-  its slots), Ctrl+C copies the recipe as Markdown: result, category, id and
-  ingredients counted, and Ctrl+Shift+C saves the card as a PNG image in AEI's
-  folder (`horizon-mods/.horizon-mod-data/aei/recipes/<recipe id>.png`).
-- Press **Ctrl+F** to focus the search field. While typing, **Up** and **Down**
-  recall earlier searches (kept when you press Enter or open an item from them).
-- Scroll or click arrows to turn pages. Right-click the search field to clear it.
-- Click **+** to move a recipe's ingredients into the crafting grid through the
-  vanilla recipe book (**Shift-click** for as many sets as the inventory allows);
-  the recipe view then closes. The button only shows on recipes the open screen's
-  book takes: crafting recipes that fit the open grid (2x2 in the inventory, 3x3
-  at a crafting table), and smelting, blasting or smoking recipes at their
-  furnace, where **+** puts one ingredient in the input and **Shift-click**
-  Shift-clicks every stack of it in, with ordinary container clicks. It is orange
-  when ingredients are missing (the grid shows the recipe as a ghost) and dark
-  when the recipe isn't unlocked in the player's recipe book.
+  another to reorder them.
+- The ribbon button at the top right of each recipe bookmarks that recipe: its
+  output joins the list with a gold corner and opens on that recipe.
+- Beyond JEI, there are three bookmark lists (collections): click the bar's
+  label to switch, right-click it to name the shown list, and press Ctrl+C or
+  Ctrl+V over it to copy the list as text or replace it with one from the
+  clipboard (plain item ids work too).
 
-Recipes, stack components, item rendering, fonts and translations come from
-Horizon's native API. Recipe placement remains subject to the player's learned
-recipes and the server's normal recipe-book rules. The vanilla recipe book is
-preserved.
+### Beyond JEI
 
-The interface reproduces [JEI](https://www.curseforge.com/minecraft/mc-mods/jei)'s
-layout and controls (see `docs/design.md`). Its graphics are drawing primitives,
-vanilla GUI sprites and the JEI-style sprites Horizon already ships; no JEI
-implementation or assets are included.
+**Material calculator.** Press **T** over an item: the raw materials a number of
+it takes, the crafting steps in order and what is left over. It prefers
+crafting, then cooking, never unpacks storage blocks, avoids loops, and counts
+what the inventory holds first (short materials are red). **T** over another
+item while it is open adds it to a shopping list; click a target to change its
+count, right-click it to remove it; Shift+click a step to make it with its next
+usable recipe. An option adds a **Next step** button that crafts the first
+step the inventory allows through the recipe book, and another keeps the
+shopping list on the HUD while you play.
 
-JEI's vanilla features are covered: the item list with its search prefixes,
-modes, sorting, edit mode and options; bookmarks; cheat mode; the recipe window
-with catalysts, transfers, cycling ingredients and category order; and the
-crafting, cooking, campfire, stonecutting, smithing, brewing, anvil, fuel and
-compostable categories. The pinned native contract provides the first six; AEI
-adds fuel and compostable from the items' own `fuel` and `compostable`
-components, and the anvil from the anvil's own rules. Water and lava
-are listed as fluids too (their icons are uploaded as AEI's own HUD image). The
-roadmap in `docs/roadmap-jei.md` tracks each JEI feature.
+![The material calculator for four hoppers](docs/images/calculator.png)
 
-AEI extends Horizon's creative inventory panel guard for its own recipe viewer
-and leaves the vanilla recipe book panel available. The viewer works from any
-inventory screen Horizon opens. The native panel holds 256 recipes at a time, so
-longer categories are sent a window at a time; the page numbers count the whole
-category.
+**Item details.** Press **I** over an item for its id, mod, English name, stack
+size, durability, food, rarity, creative tabs, recipe counts, components and
+tags. Click a tag to list its items, or right-click it for the recipes that take
+any of them. **Edit note** keeps a note on the item.
+
+![The details panel of a diamond pickaxe](docs/images/details.png)
+
+**Loot, drops and trades.** Read from the game's loot tables: Block Drops (what
+breaking a block gives besides itself), Mob Drops (each mob as its spawn egg) and
+Loot (chests, barrels, archaeology, fishing, bartering, shearing), one card per
+item, with the table named in the slot tooltips. Every villager offer you see on
+a trading screen joins a Trading category.
+
+![Chests that can hold diamonds](docs/images/loot.png)
+
+**Fluids.** A Fluids category shows water and lava at work: buckets and bottles
+filled, concrete powder set, water meeting lava. Their icons use Horizon's single
+per-game mod image, so another native mod drawing its own image would replace
+them.
+
+**More.**
+
+- **P** over a recipe card pins it at the bottom left of the screen (two at
+  most), kept in later sessions; P over it again unpins it.
+- **Ctrl+C** over an item copies its id, **Ctrl+Shift+C** a `/give` command for
+  that exact stack. Over a recipe card, Ctrl+C copies the recipe as Markdown and
+  Ctrl+Shift+C saves the card as a PNG in AEI's folder
+  (`horizon-mods/.horizon-mod-data/aei/recipes/<recipe id>.png`).
+- **R** or **U** aimed at a block or an entity in the world (no screen open)
+  opens the inventory on its item: an entity's pick-block item, such as a mob's
+  spawn egg, whose uses are its drops.
+- **Tab** puts a keyboard focus on the item list: the arrows move it across
+  pages, Enter opens the focused item's recipes and AEI's keys act on it.
+- With a controller, Horizon's inventory pointer hops between AEI's cells: A
+  shows recipes, X uses, B goes back, the right stick turns pages, View bookmarks
+  and the left stick click opens the calculator.
+- With the game's narrator on, every item cell is read by name and count, and
+  resting the pointer on a recipe card reads the whole recipe.
+- For modpack makers, the settings page writes `report.md`: recipe counts by
+  category, items no recipe makes or uses, conflicting crafting recipes, items no
+  chain of recipes reaches and item tags no item fills.
+
+## Controls
+
+| Key | Over | Does |
+|---|---|---|
+| **R** / **U** | any item, or a block or entity in the world | recipes / uses |
+| Left / right click | an item in the list | recipes / uses |
+| **A** | any item | bookmark it |
+| **T** | any item | material calculator (adds to the list while it is open) |
+| **I** | any item | details panel |
+| **P** | a recipe card | pin it beside the screen |
+| **Ctrl+C** / **Ctrl+Shift+C** | an item | copy its id / a `/give` command |
+| **Ctrl+C** / **Ctrl+Shift+C** | a recipe card | copy it as Markdown / save it as PNG |
+| **Shift** | a recipe | pause the cycling ingredients |
+| **Backspace**, **Left** / **Right** | recipes open | step back / back and forward in the lookup history |
+| **Escape** or **E** | recipes open | close them, keeping the inventory open |
+| **Ctrl+F** | the inventory | focus the search field |
+| **Up** / **Down** | the search field | earlier searches |
+| **Tab** | the inventory | keyboard focus on the item list |
+| **Ctrl+O** | the inventory | hide or show the overlay (remembered) |
+| Ctrl+click | the settings button | cheat mode |
+| Right-click | the search field | clear it |
+
+R, U, A, T, I and the back and forward keys can be rebound in Horizon's
+controls.
+
+## Options
+
+The settings button (the wrench) opens AEI's page. Options that change the
+vanilla look are off by default.
+
+- **Cheat mode** tints the list red; clicking an item, bookmark or ingredient
+  then gives it, a full stack with the left button and one with the right. In
+  Creative the items go to the inventory (or to the cursor on the creative
+  screen, if set); otherwise AEI sends `/give`, which the server only allows with
+  permission. A stack dropped on the list on the creative screen is deleted.
+- **Mod name in tooltips**, in blue italics as JEI does, and **recipe and use
+  counts** in tooltips.
+- **Spoiler-free mode** lists only items that have been in your inventory or
+  that an unlocked recipe makes, and hides recipes you haven't unlocked (kept per
+  world, or per server).
+- **Mark newly found items** with a gold dot, including what newly unlocked
+  recipes make; a "New (N)" chip lists them and right-clicking it marks them all
+  as seen.
+- **Search dims other inventory items** the typed search leaves out.
+- **Group variants** folds an item's variants into one entry marked "+";
+  Shift+click it to unfold them.
+- **Recently viewed row** at the bottom left with the last nine lookups.
+- **Dark theme**, **high contrast** and a **compact item list** with 16-px
+  cells.
+- **Shift over an item previews its recipe** next to the pointer.
+- **Shopping list on the HUD**, and the calculator's **Next step** button.
 
 ## Install
 
@@ -193,6 +247,12 @@ Native mods run with the player's account permissions.
 The launcher installs the latest release's `.hnmod` asset when there is one;
 otherwise it builds the pinned commit from source. Both use the revisions in
 `horizon-native.json`.
+
+AEI's recipes, stack components, item rendering, fonts and translations come
+from Horizon's native API. Recipe placement stays subject to the player's
+learned recipes and the server's rules, and the vanilla recipe book is kept. The
+graphics are drawing primitives, vanilla GUI sprites and the JEI-style sprites
+Horizon ships; no JEI code or assets are included (see `docs/design.md`).
 
 ## Develop and verify
 
@@ -230,8 +290,11 @@ the colon, so scripts keep stable ids and can still read what is shown.
 
 For a disposable game already running with a control socket,
 `cargo xtask ui-test /tmp/test-game/ctl.sock --out /tmp/aei-ui` exercises real
-clicks, scrolling, categories, history and search and saves screenshots outside
-the repository.
+clicks, scrolling, categories, history, search, the calculator and the themes,
+and saves screenshots outside the repository.
+
+The native panel holds 256 recipes at a time, so longer categories are sent a
+window at a time; the page numbers count the whole category.
 
 ## Release
 
@@ -254,19 +317,20 @@ mixins/aei/                 the bundle Horizon builds into the game
   horizon-mixin.toml        mod, pins, support modules and injections
   engine/                   aei-engine: Horizon-independent browser model
     src/browser.rs          event dispatch
-    src/browser/search.rs   catalogue filtering and search grammar
-    src/browser/recipes.rs  recipe indexing and presentation
-    src/browser/history.rs  lookup history
+    src/browser/            search, recipes, history, bookmarks, calculator,
+                            loot and trades, discovery, report...
     src/viewer.rs           recipe geometry and pagination
     src/types.rs            browser models and actions
   modules/                  support modules injected into horizon-client
     runtime.rs              mod identity, key bindings, engine re-exports
     glue.rs                 native table lifecycle, conversion and actions
     centered_recipe_overlay.rs  recipe rendering and modal interaction
-    recipe_paint.rs         original panel, slot, arrow and button drawing
+    recipe_paint.rs         panel, slot, arrow, button and theme drawing
+    recipe_status.rs        recipe-book and furnace transfers
   hooks/                    one small helper per [[injection]]
-xtask/                      cargo xtask check | package | ui-test
+xtask/                      cargo xtask check | install | package | ui-test
 docs/design.md              structural decisions and their reasons
+docs/images/                the screenshots above
 ```
 
 The engine's `Cargo.toml` does not inherit workspace fields: Horizon copies the
