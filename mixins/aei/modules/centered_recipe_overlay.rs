@@ -1906,7 +1906,8 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         .and_then(|view| shapeless_hovered(game, view))
     {
         game.draw_tooltip_lines(batch, &[(text, u32::MAX)], cursor.0, cursor.1);
-    } else if screen.view.is_none() {
+    } else if screen.view.is_none() && game.screen != crate::game::Screen::Creative {
+        // The creative screen draws its own slots' tooltips (with their tabs).
         game.draw_slot_tooltip(batch);
     }
     ControlFlow::Break(())
