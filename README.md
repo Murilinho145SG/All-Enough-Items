@@ -90,7 +90,8 @@ through Horizon's native mod system.
 - Press **A** over any item (the list, a recipe, an inventory slot) to bookmark
   it, as in JEI; bookmarks line up on the left of the screen with their own
   pages, open recipes and uses like the list, and are saved. Drag one onto
-  another to reorder them. The ribbon button
+  another to reorder them. Beyond JEI, click the bookmark bar's label to switch
+  between three separate bookmark lists (collections). The ribbon button
   at the top right of each recipe bookmarks that recipe: its output joins the
   list with a gold corner and opens on that recipe.
 - Cheat mode (Ctrl+click the settings button, or the settings page) tints the

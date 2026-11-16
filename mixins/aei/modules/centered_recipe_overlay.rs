@@ -175,12 +175,12 @@ fn screen(game: &Game<'_>, batch: &HudBatch, recipes: bool) -> Option<Screen> {
         viewer::SLOT + 4.0
     };
     let recent: Vec<_> = recent_stacks.into_iter().zip(cells).collect();
-    let bookmarks = BookmarkList::above(
-        size,
-        left,
-        crate::game::aei_glue::bookmark_count(),
-        reserved,
-    );
+    // Another collection than the first shows even while empty, to switch back.
+    let mut count = crate::game::aei_glue::bookmark_count();
+    if crate::game::aei_glue::bookmark_list() != 0 {
+        count = count.max(1);
+    }
+    let bookmarks = BookmarkList::above(size, left, count, reserved);
     // Without a recipe window, AEI only takes over when its list fits.
     (view.is_some() || items.is_some()).then_some(Screen {
         view,
@@ -819,7 +819,14 @@ fn draw_bookmarks(game: &mut Game<'_>, batch: &mut HudBatch, list: &BookmarkList
     let [back, forward] = list.arrows();
     let [x, y, w, h] = list.nav;
     paint::strip(game, batch, [x + back[2], y, w - back[2] - forward[2], h]);
-    let label = format!("{}/{}", page + 1, pages);
+    // Which collection (bookmark list) shows; clicking the label switches it.
+    let collection = crate::game::aei_glue::bookmark_list() + 1;
+    let label = format!("L{collection} \u{b7} {}/{}", page + 1, pages);
+    horizon_client::widgets::record(
+        "Switch bookmark list",
+        [x + back[2], y, w - back[2] - forward[2], h],
+        true,
+    );
     if game.gui.atlas.font.width(&label) <= w - back[2] - forward[2] {
         paint::title(game, batch, &label, list.nav);
     }
@@ -1775,6 +1782,13 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
             .position(|rect| viewer::contains(*rect, game.cursor))
         {
             turn_bookmark_page(list, i == 1);
+            game.audio
+                .play("minecraft:ui.button.click", None, 0.25, 1.0);
+            return ControlFlow::Break(true);
+        }
+        if viewer::contains(list.nav, game.cursor) {
+            crate::game::aei_glue::cycle_bookmark_list(game);
+            BOOKMARK_PAGE.with(|cell| *cell.borrow_mut() = 0);
             game.audio
                 .play("minecraft:ui.button.click", None, 0.25, 1.0);
             return ControlFlow::Break(true);

@@ -32,6 +32,43 @@ std::thread_local! {
 }
 
 const SETTING_BOOKMARKS: &str = "bookmarks";
+const SETTING_BOOKMARK_LIST: &str = "bookmark_list";
+/// Bookmark lists (collections) a player can switch between.
+const BOOKMARK_LISTS: usize = 3;
+static BOOKMARK_LIST: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// The settings key of the shown bookmark list: `bookmarks`, `bookmarks_2`, ...
+fn bookmarks_key() -> String {
+    match BOOKMARK_LIST.load(std::sync::atomic::Ordering::Relaxed) {
+        0 => SETTING_BOOKMARKS.to_owned(),
+        n => format!("{SETTING_BOOKMARKS}_{}", n + 1),
+    }
+}
+
+/// Which bookmark list shows (0 for the first).
+pub(super) fn bookmark_list() -> usize {
+    BOOKMARK_LIST.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Shows the next bookmark list (a collection), wrapping after the last.
+pub(super) fn cycle_bookmark_list(game: &mut Game<'_>) {
+    let next = (bookmark_list() + 1) % BOOKMARK_LISTS;
+    BOOKMARK_LIST.store(next, std::sync::atomic::Ordering::Relaxed);
+    game.native_set_setting(model::ID, SETTING_BOOKMARK_LIST, &next.to_string());
+    let saved = game
+        .native_setting(model::ID, &bookmarks_key())
+        .unwrap_or_default();
+    if let Some(model::Update::Bookmarks(list)) =
+        with_browser(|browser| browser.load_bookmarks(&saved))
+    {
+        BOOKMARKS.with(|cell| {
+            *cell.borrow_mut() = list
+                .iter()
+                .map(|b| (native(&b.stack), b.recipe.is_some()))
+                .collect();
+        });
+    }
+}
 
 std::thread_local! {
     /// The found items as last saved, so they are written only when they change.
@@ -439,7 +476,7 @@ fn publish(game: &mut Game<'_>, update: model::Update) {
                     .collect();
             });
             if let Some(text) = with_browser(|browser| browser.bookmarks_text()) {
-                game.native_set_setting(model::ID, SETTING_BOOKMARKS, &text);
+                game.native_set_setting(model::ID, &bookmarks_key(), &text);
             }
         }
         model::Update::ItemList(items) => {
@@ -553,8 +590,14 @@ pub(super) fn frame(game: &mut Game<'_>) {
                 }
             }
             load_flags(game);
+            let list = game
+                .native_setting(model::ID, SETTING_BOOKMARK_LIST)
+                .and_then(|n| n.parse().ok())
+                .filter(|n| *n < BOOKMARK_LISTS)
+                .unwrap_or(0);
+            BOOKMARK_LIST.store(list, std::sync::atomic::Ordering::Relaxed);
             let saved = game
-                .native_setting(model::ID, SETTING_BOOKMARKS)
+                .native_setting(model::ID, &bookmarks_key())
                 .unwrap_or_default();
             if let model::Update::Bookmarks(list) = browser.load_bookmarks(&saved) {
                 BOOKMARKS.with(|cell| {
