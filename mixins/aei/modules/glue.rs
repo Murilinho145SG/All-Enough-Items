@@ -22,6 +22,7 @@ static MARK_NEW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::
 static COUNTS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static HIGHLIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static PREVIEW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static PLAN_HUD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CENTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static COLUMNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(9);
 
@@ -1365,6 +1366,7 @@ const SETTING_CHIPS: &str = "search_chips";
 pub(super) const CHIPS: usize = 8;
 const SETTING_PINNED: &str = "pinned_recipes";
 const SETTING_PREVIEW: &str = "shift_preview";
+const SETTING_PLAN_HUD: &str = "plan_hud";
 const SETTING_TRADES: &str = "trades";
 const SETTING_RECENT_ITEMS: &str = "recent_items";
 
@@ -1383,6 +1385,7 @@ fn load_flags(game: &Game<'_>) {
     COUNTS.store(flag(game, SETTING_COUNTS), Relaxed);
     HIGHLIGHT.store(flag(game, SETTING_HIGHLIGHT), Relaxed);
     PREVIEW.store(flag(game, SETTING_PREVIEW), Relaxed);
+    PLAN_HUD.store(flag(game, SETTING_PLAN_HUD), Relaxed);
     game.aei_set_dark(flag(game, SETTING_DARK));
     CENTERED.store(flag(game, SETTING_CENTERED), Relaxed);
     COLUMNS.store(columns(game), Relaxed);
@@ -1504,6 +1507,10 @@ fn settings() -> Vec<Setting> {
         Setting::Flag(SETTING_GROUPS, "Fold item variants into groups"),
         Setting::Flag(SETTING_DARK, "Dark theme for AEI's windows"),
         Setting::Flag(SETTING_PREVIEW, "Shift over an item previews its recipe"),
+        Setting::Flag(
+            SETTING_PLAN_HUD,
+            "Shopping list's missing materials on the HUD",
+        ),
         Setting::Report,
         Setting::Flag(SETTING_MOD_NAMES, "Mod name in tooltips"),
         Setting::Flag(SETTING_CURSOR, "Cheat items in Creative go to the cursor"),
@@ -2095,4 +2102,9 @@ pub(super) fn cycle_plan_recipe(game: &mut Game<'_>, item: &str) {
         None => "This step has no other recipe".to_owned(),
     };
     game.message = Some((text, std::time::Instant::now()));
+}
+
+/// Whether the shopping list shows on the HUD (an option, off by default).
+pub(super) fn plan_hud_enabled() -> bool {
+    PLAN_HUD.load(std::sync::atomic::Ordering::Relaxed)
 }

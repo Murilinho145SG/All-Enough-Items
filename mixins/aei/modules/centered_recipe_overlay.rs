@@ -2496,6 +2496,62 @@ impl Game<'_> {
         toggle_pin(self, &batch)
     }
 
+    /// Beyond JEI (an option): while playing, the calculator's shopping list shows on the
+    /// HUD: what it still lacks after the inventory, or that everything is ready.
+    pub(in crate::game) fn aei_plan_hud(
+        &mut self,
+        batch: &mut HudBatch,
+        corners: &mut horizon_client::extras_hud::Corners,
+    ) {
+        use horizon_client_render::extras::Corner;
+        if !crate::game::aei_glue::plan_hud_enabled()
+            || self.screen != crate::game::Screen::Playing
+            || self.title.is_some()
+            || !self.native_corner_shown(Corner::TopLeft)
+        {
+            return;
+        }
+        let Some((targets, _)) = plan_state() else {
+            return;
+        };
+        let Some(plan) = crate::game::aei_glue::plan(self, &targets) else {
+            return;
+        };
+        let mut lines = vec!["Shopping list".to_owned()];
+        let short: Vec<_> = plan.materials.iter().filter(|m| m.have < m.need).collect();
+        for m in short.iter().take(8) {
+            let name = self.pack.names.display_item(&m.stack.id);
+            lines.push(format!("\u{a7}c{} \u{d7} {name}", m.need - m.have));
+        }
+        if short.len() > 8 {
+            lines.push(format!("\u{a7}7... and {} more", short.len() - 8));
+        }
+        if short.is_empty() {
+            lines.push("\u{a7}aEverything is in the inventory".to_owned());
+        }
+        let font = &self.gui.atlas.font;
+        let w = lines.iter().map(|l| font.width(l)).fold(0.0, f32::max) + 6.0;
+        let h = lines.len() as f32 * 10.0 + 4.0;
+        let (x, y) = corners.place(Corner::TopLeft, w, h);
+        self.native_fill(batch, [x, y, w, h], 0x7800_0000);
+        for (i, line) in lines.iter().enumerate() {
+            let colour = if i == 0 {
+                rgba(255, 255, 160, 255)
+            } else {
+                u32::MAX
+            };
+            let text = horizon_client::text::Text::legacy(line);
+            batch.text_styled(
+                &self.gui.atlas,
+                &text,
+                x + 3.0,
+                y + 3.0 + i as f32 * 10.0,
+                colour,
+                true,
+            );
+        }
+    }
+
     /// AEI's dark theme (an option).
     pub(in crate::game) fn aei_set_dark(&self, on: bool) {
         paint::set_dark(on);
