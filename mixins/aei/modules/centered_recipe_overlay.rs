@@ -943,18 +943,44 @@ fn draw_recipes(
         }
         horizon_client::widgets::record(&format!("Recipe category {i}"), *rect, true);
     }
-    // The lookup trail above the tabs; the shown lookup is framed in gold.
+    // The lookup trail above the tabs: one bar, chevrons between the lookups, the
+    // shown one lit and underlined, the ones after it (Forward) dimmed, and a blue
+    // corner on the lookups that show uses.
     let (crumbs, current) = breadcrumbs(view);
-    for (i, stack, _, rect) in &crumbs {
-        paint::slot(game, batch, *rect);
+    let cells: Vec<viewer::Rect> = crumbs.iter().map(|(.., rect)| *rect).collect();
+    if let Some(bar) = Viewer::trail_bar(&cells) {
+        paint::trail_bar(game, batch, bar);
+    }
+    for (n, (i, stack, uses, rect)) in crumbs.iter().enumerate() {
+        let [x, y, w, h] = *rect;
+        if n > 0 {
+            paint::chevron(
+                game,
+                batch,
+                [x - viewer::TRAIL_GAP, y, viewer::TRAIL_GAP, h],
+            );
+        }
+        let shown = Some(*i) == current;
+        if shown {
+            paint::fill(game, batch, *rect, rgba(255, 255, 255, 0x38));
+            paint::fill(
+                game,
+                batch,
+                [x + 1.0, y + h - 2.0, w - 2.0, 2.0],
+                rgba(255, 200, 40, 255),
+            );
+        }
         draw_stack(game, batch, stack, *rect, &format!("Breadcrumb {i}"), true);
-        if Some(*i) == current {
-            let [x, y, w, h] = *rect;
-            let gold = rgba(255, 200, 40, 255);
-            paint::fill(game, batch, [x, y, w, 1.0], gold);
-            paint::fill(game, batch, [x, y + h - 1.0, w, 1.0], gold);
-            paint::fill(game, batch, [x, y, 1.0, h], gold);
-            paint::fill(game, batch, [x + w - 1.0, y, 1.0, h], gold);
+        if current.is_some_and(|c| *i > c) {
+            paint::fill(game, batch, *rect, rgba(0, 0, 0, 0x90));
+        }
+        if *uses {
+            paint::fill(
+                game,
+                batch,
+                [x + w - 4.0, y + 1.0, 3.0, 3.0],
+                rgba(90, 160, 255, 255),
+            );
         }
     }
 }

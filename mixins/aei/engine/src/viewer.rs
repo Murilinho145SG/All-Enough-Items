@@ -539,21 +539,38 @@ impl Sidebar {
 /// Breadcrumbs shown at most.
 pub const TRAIL: usize = 10;
 
+/// The gap between two breadcrumbs, where a chevron goes.
+pub const TRAIL_GAP: f32 = 7.0;
+/// The breadcrumb bar's padding around its cells.
+pub const TRAIL_PAD: f32 = 2.0;
+
 impl Viewer {
     /// The lookup trail's cells, `count` (at most [`TRAIL`]) in a row centred above the
     /// category tabs; none when the screen has no room there.
     pub fn trail(&self, count: usize) -> Vec<Rect> {
         let count = count.min(TRAIL);
         let tabs_top = self.area[1] - TAB + 3.0;
-        let y = tabs_top - SLOT - 1.0;
-        if count == 0 || y < 0.0 {
+        let y = tabs_top - SLOT - TRAIL_PAD - 2.0;
+        if count == 0 || y - TRAIL_PAD < 0.0 {
             return Vec::new();
         }
-        let width = count as f32 * SLOT;
+        let step = SLOT + TRAIL_GAP;
+        let width = count as f32 * step - TRAIL_GAP;
         let x = (self.area[0] + (self.area[2] - width) / 2.0).floor();
         (0..count)
-            .map(|i| [x + i as f32 * SLOT, y, SLOT, SLOT])
+            .map(|i| [x + i as f32 * step, y, SLOT, SLOT])
             .collect()
+    }
+
+    /// The bar behind the breadcrumb `cells`: their row with [`TRAIL_PAD`] around it.
+    pub fn trail_bar(cells: &[Rect]) -> Option<Rect> {
+        let (first, last) = (cells.first()?, cells.last()?);
+        Some([
+            first[0] - TRAIL_PAD,
+            first[1] - TRAIL_PAD,
+            last[0] + last[2] - first[0] + 2.0 * TRAIL_PAD,
+            first[3] + 2.0 * TRAIL_PAD,
+        ])
     }
 
     /// The station tab grown to hold `count` catalysts, one well under another, and
@@ -794,11 +811,19 @@ mod tests {
         let first = cells[0];
         let last = cells[TRAIL - 1];
         assert!(first[1] >= 0.0 && first[1] + first[3] <= view.tabs[0].1[1]);
-        assert_eq!(
+        // Centred, to the pixel the rounding leaves.
+        let (left, right) = (
             first[0] - view.area[0],
-            view.area[0] + view.area[2] - (last[0] + last[2])
+            view.area[0] + view.area[2] - (last[0] + last[2]),
         );
+        assert!((left - right).abs() <= 1.0, "{left} {right}");
         assert!(view.trail(0).is_empty());
+        // Chevron gaps between cells, and a bar padded around them, clear of the tabs.
+        assert_eq!(cells[1][0] - (cells[0][0] + cells[0][2]), TRAIL_GAP);
+        let bar = Viewer::trail_bar(&cells).unwrap();
+        assert_eq!(bar[0], first[0] - TRAIL_PAD);
+        assert!(bar[1] >= 0.0 && bar[1] + bar[3] <= view.tabs[0].1[1]);
+        assert!(Viewer::trail_bar(&[]).is_none());
     }
 
     #[test]

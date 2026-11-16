@@ -467,3 +467,35 @@ pub(super) fn action_button(
         enabled,
     );
 }
+
+/// The breadcrumb bar: a dark translucent strip with a faint light edge and cut corners.
+pub(super) fn trail_bar(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: Rect) {
+    let back = themed(rgba(16, 16, 20, 0xC8), rgba(10, 10, 12, 0xD8), black());
+    let edge = themed(
+        rgba(255, 255, 255, 0x50),
+        rgba(255, 255, 255, 0x40),
+        white(),
+    );
+    fill(game, batch, [x + 1.0, y + 1.0, w - 2.0, h - 2.0], back);
+    fill(game, batch, [x + 2.0, y, w - 4.0, 1.0], edge);
+    fill(game, batch, [x + 2.0, y + h - 1.0, w - 4.0, 1.0], edge);
+    fill(game, batch, [x, y + 2.0, 1.0, h - 4.0], edge);
+    fill(game, batch, [x + w - 1.0, y + 2.0, 1.0, h - 4.0], edge);
+    for (dx, dy) in [
+        (1.0, 1.0),
+        (w - 2.0, 1.0),
+        (1.0, h - 2.0),
+        (w - 2.0, h - 2.0),
+    ] {
+        dot(game, batch, x + dx, y + dy, edge);
+    }
+}
+
+/// A small chevron (">") centred in `rect`, between two breadcrumbs.
+pub(super) fn chevron(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: Rect) {
+    let colour = themed(rgba(170, 170, 180, 255), rgba(150, 150, 160, 255), white());
+    let (cx, cy) = ((x + (w - 3.0) / 2.0).floor(), (y + (h - 5.0) / 2.0).floor());
+    for (dx, dy) in [(0.0, 0.0), (1.0, 1.0), (2.0, 2.0), (1.0, 3.0), (0.0, 4.0)] {
+        dot(game, batch, cx + dx, cy + dy, colour);
+    }
+}
