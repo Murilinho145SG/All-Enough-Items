@@ -21,6 +21,7 @@ mod listing;
 mod perf;
 mod plan;
 mod recipes;
+mod regex;
 mod report;
 mod search;
 mod search_history;
@@ -1326,6 +1327,33 @@ mod tests {
         browser.handle(Event::Search("oak".into()), false, &[]);
         assert_eq!(browser.in_results("minecraft:oak_log"), Some(true));
         assert_eq!(browser.in_results("minecraft:stick"), Some(false));
+    }
+
+    #[test]
+    fn slashes_search_with_a_regular_expression() {
+        let (items, recipes) = fixture();
+        let (mut browser, _) = Browser::new(items, recipes);
+        let mut found = |query: &str| {
+            browser.handle(Event::Search(query.into()), false, &[]);
+            let mut ids: Vec<&str> = [
+                "minecraft:oak_log",
+                "minecraft:oak_planks",
+                "minecraft:stick",
+            ]
+            .into_iter()
+            .filter(|id| browser.in_results(id) == Some(true))
+            .collect();
+            ids.sort_unstable();
+            ids.join(",")
+        };
+        assert_eq!(found("/^oak/"), "minecraft:oak_log,minecraft:oak_planks");
+        assert_eq!(found("/log$|^stick$/"), "minecraft:oak_log,minecraft:stick");
+        assert_eq!(found("&/:stick$/"), "minecraft:stick");
+        assert_eq!(found(r#""/^oak \w+s$/""#), "minecraft:oak_planks");
+        assert_eq!(found("/^oak/ -/log/"), "minecraft:oak_planks");
+        // A bad pattern searches its text.
+        assert_eq!(found("/zz(/"), "");
+        assert_eq!(found("/stic/"), "minecraft:stick");
     }
 
     #[test]

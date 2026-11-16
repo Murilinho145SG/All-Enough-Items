@@ -21,7 +21,9 @@ through Horizon's native mod system.
   first), `is:locked` (what a recipe-book recipe you haven't unlocked makes),
   `has:recipe`, `no:recipe`,
   `rarity:epic`, and numbers with `stack`, `dur` and `nutrition` (`stack:1`,
-  `dur>500`, `nutrition<4`).
+  `dur>500`, `nutrition<4`). Between slashes a term is a regular expression
+  (`/^oak/`, `&/_log$/`, `"/^oak \w+s$/"` quoted for spaces): `.`, classes,
+  `\d \w \s`, anchors, groups, `|` and repeats, ignoring case.
 - Press **Ctrl+O** to hide or show the overlay (remembered between sessions).
 - The settings page orders the list by creative tabs (the default), mod or name,
   and has JEI's edit mode: while it is on, clicking an entry hides it (Ctrl+click

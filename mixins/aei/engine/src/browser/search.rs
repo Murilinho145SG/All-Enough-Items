@@ -18,6 +18,8 @@ struct SearchTerm {
     filter: Option<Filter>,
     value: String,
     excluded: bool,
+    /// A `/.../` term: the pattern it is matched with instead of `value`.
+    regex: Option<super::regex::Regex>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -166,14 +168,19 @@ impl Indexed {
     }
 
     fn field(&self, field: Field, value: &str) -> bool {
-        let any = |list: &[String]| list.iter().any(|s| s.contains(value));
+        self.field_with(field, &|text| text.contains(value))
+    }
+
+    /// Whether `test` holds for field `field`'s text (any of its lines).
+    fn field_with(&self, field: Field, test: &dyn Fn(&str) -> bool) -> bool {
+        let any = |list: &[String]| list.iter().any(|s| test(s));
         match field {
             // The namespace is the mod's id; vanilla's mod is called "Minecraft".
-            Field::Mod => self.namespace.contains(value),
+            Field::Mod => test(&self.namespace),
             Field::Tooltip => any(&self.tooltip),
             Field::Tag => any(&self.tags),
             Field::Tab => any(&self.tabs),
-            Field::Id => self.id.contains(value),
+            Field::Id => test(&self.id),
         }
     }
 
@@ -290,7 +297,15 @@ impl SearchQuery {
         let mut escaped = false;
 
         for character in query.chars() {
+            // Inside `/.../` backslashes and `|` belong to the pattern.
+            let in_pattern = {
+                let body = token.trim_start_matches(|c| Field::ALL.iter().any(|f| f.prefix() == c));
+                body.starts_with('/') && !body[1..].contains('/')
+            };
             if escaped {
+                if in_pattern {
+                    token.push('\\');
+                }
                 token.push(character);
                 token_started = true;
                 escaped = false;
@@ -311,7 +326,7 @@ impl SearchQuery {
                 token_started = false;
                 continue;
             }
-            if !quoted && character == '|' {
+            if !quoted && character == '|' && !in_pattern {
                 Self::finish_token(&mut groups, &mut token, &mut excluded, modes);
                 token_started = false;
                 if !groups.last().is_some_and(Vec::is_empty) {
@@ -350,6 +365,7 @@ impl SearchQuery {
                 filter: Some(filter),
                 value: String::new(),
                 excluded: *excluded,
+                regex: None,
             });
         } else if !token.is_empty() {
             let first = token.chars().next().unwrap_or_default();
@@ -362,7 +378,17 @@ impl SearchQuery {
             } else {
                 token.as_str()
             };
-            if !value.is_empty()
+            // `/pattern/`: a regular expression (a bad one searches its text).
+            let pattern = value
+                .strip_prefix('/')
+                .and_then(|rest| rest.strip_suffix('/'))
+                .filter(|_| value.len() >= 2);
+            let regex = pattern.and_then(super::regex::Regex::new);
+            let value = match (pattern, &regex) {
+                (Some(inner), None) => inner,
+                _ => value,
+            };
+            if (!value.is_empty() || regex.is_some())
                 && let Some(group) = groups.last_mut()
             {
                 group.push(SearchTerm {
@@ -370,6 +396,7 @@ impl SearchQuery {
                     filter: None,
                     value: fold(value),
                     excluded: *excluded,
+                    regex,
                 });
             }
         }
@@ -390,6 +417,20 @@ impl SearchQuery {
                     let value = term.value.as_str();
                     let found = if let Some(filter) = &term.filter {
                         entry.filter(filter).then_some(Quality::Exact)
+                    } else if let Some(regex) = &term.regex {
+                        let test = |text: &str| regex.is_match(text);
+                        let hit = match term.field {
+                            Some(field) => entry.field_with(field, &test),
+                            None => {
+                                test(&entry.name)
+                                    || entry.aliases.iter().any(|a| test(a))
+                                    || Field::ALL.into_iter().any(|f| {
+                                        f.mode(modes) == SearchMode::Enabled
+                                            && entry.field_with(f, &test)
+                                    })
+                            }
+                        };
+                        hit.then_some(Quality::Exact)
                     } else {
                         match term.field {
                             Some(field) => entry.field(field, value).then_some(Quality::Exact),
