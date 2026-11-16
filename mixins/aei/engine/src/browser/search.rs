@@ -399,6 +399,20 @@ impl SearchQuery {
 }
 
 impl Browser {
+    /// The variant count of the group whose first entry is list entry `index` (an item
+    /// with several variants), and whether it is expanded. None for other entries.
+    pub fn shown_group(&self, index: usize) -> Option<(usize, bool)> {
+        let &entry = self.filtered_items.get(index)?;
+        let size = *self.group_sizes.get(&entry)?;
+        let id = &self.catalogue[entry].stack.id;
+        // Only the group's first entry carries the mark.
+        let first = self
+            .filtered_items
+            .iter()
+            .position(|&i| self.catalogue[i].stack.id == *id)?;
+        (first == index).then_some((size, self.expanded.contains(id)))
+    }
+
     /// Whether a search is typed and `item` is among its results (for highlighting
     /// the inventory). None without a search.
     pub fn in_results(&self, item: &str) -> Option<bool> {
@@ -424,6 +438,30 @@ impl Browser {
             }
         }
         exact.extend(fuzzy);
+        // Grouping (an option): an item's variants collapse into their first entry,
+        // unless that group was expanded.
+        self.group_sizes.clear();
+        if self.grouping {
+            let mut first: std::collections::HashMap<&str, usize> = Default::default();
+            let mut kept = Vec::with_capacity(exact.len());
+            for &index in &exact {
+                let id = self.catalogue[index].stack.id.as_str();
+                match first.get(id) {
+                    Some(&head) if !self.expanded.contains(id) => {
+                        *self.group_sizes.entry(head).or_insert(1) += 1;
+                    }
+                    Some(&head) => {
+                        *self.group_sizes.entry(head).or_insert(1) += 1;
+                        kept.push(index);
+                    }
+                    None => {
+                        first.insert(id, index);
+                        kept.push(index);
+                    }
+                }
+            }
+            exact = kept;
+        }
         exact.truncate(ITEM_LIMIT);
         self.result_ids = exact
             .iter()

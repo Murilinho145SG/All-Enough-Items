@@ -682,6 +682,19 @@ fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, items: &Sidebar, layout
         let (x, y) = layout.slot(offset);
         let rect = [x, y, viewer::SLOT, viewer::SLOT];
         draw_stack(game, batch, stack, rect, &format!("Item {index}"), true);
+        if let Some((_, open)) = crate::game::aei_glue::shown_group(index) {
+            // A group of variants: "+" folded, "-" unfolded, in the top left corner.
+            let [x, y, _, _] = rect;
+            let mark = if open { "-" } else { "+" };
+            batch.text(
+                &game.gui.atlas,
+                mark,
+                x + 1.0,
+                y,
+                rgba(255, 255, 160, 255),
+                true,
+            );
+        }
         if crate::game::aei_glue::shown_fresh(index) {
             // Newly found: a small gold dot in the corner.
             let [x, y, w, _] = rect;
@@ -1330,7 +1343,14 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         })
         .or_else(|| {
             let (_, layout) = screen.items.as_ref()?;
-            hovered_item(game, layout).map(|(_, stack)| stack)
+            let (index, stack) = hovered_item(game, layout)?;
+            if let Some((size, open)) = crate::game::aei_glue::shown_group(index) {
+                let action = if open { "fold" } else { "unfold" };
+                slot_lines = vec![format!(
+                    "\u{a7}7{size} variants \u{b7} Shift+click to {action}"
+                )];
+            }
+            Some(stack)
         })
         .or_else(|| {
             let list = screen.bookmarks.as_ref()?;

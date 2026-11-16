@@ -344,6 +344,10 @@ pub enum Event {
     SetKnown(Vec<i32>),
     /// Spoiler-free mode: only found items and unlocked recipes show.
     SetSpoilerFree(bool),
+    /// Collapsible groups: an item's variants fold into one entry.
+    SetGrouping(bool),
+    /// Expands or folds the group of list entry `n`.
+    ToggleGroup(usize),
     SetSort(SortOrder),
     /// Edit mode shows hidden entries (marked) and makes clicks hide or show them.
     SetEditMode(bool),

@@ -44,6 +44,11 @@ pub struct Browser {
     /// Catalogue indexes of the entries the search shows, and their item ids.
     filtered_items: Vec<usize>,
     result_ids: std::collections::HashSet<String>,
+    /// Collapsible groups (an option): the expanded items, and each group's size by
+    /// its first catalogue entry.
+    grouping: bool,
+    expanded: std::collections::HashSet<String>,
+    group_sizes: HashMap<usize, usize>,
     query: String,
     search: SearchQuery,
     /// The items looked up last, newest first.
@@ -362,6 +367,23 @@ impl Browser {
         match event {
             Event::SetInventory { stacks, grid } => self.set_inventory(stacks, grid),
             Event::SetKnown(known) => self.set_known(known),
+            Event::SetGrouping(on) => {
+                if on == self.grouping {
+                    return Vec::new();
+                }
+                self.grouping = on;
+                vec![self.item_list()]
+            }
+            Event::ToggleGroup(index) => {
+                let Some(&entry) = self.filtered_items.get(index) else {
+                    return Vec::new();
+                };
+                let id = self.catalogue[entry].stack.id.clone();
+                if !self.expanded.remove(&id) {
+                    self.expanded.insert(id);
+                }
+                vec![self.item_list()]
+            }
             Event::SetSpoilerFree(on) => self.set_spoiler_free(on),
             Event::ShowWindow { offset, len } => {
                 if self.history.current().is_none() {
@@ -1255,6 +1277,28 @@ mod tests {
         browser.handle(Event::Search("oak".into()), false, &[]);
         assert_eq!(browser.in_results("minecraft:oak_log"), Some(true));
         assert_eq!(browser.in_results("minecraft:stick"), Some(false));
+    }
+
+    #[test]
+    fn grouping_folds_variants_and_shift_clicks_unfold_them() {
+        let (items, recipes) = fixture();
+        let (mut browser, _) = Browser::new(items, recipes);
+        browser.set_catalogue(vec![
+            entry("minecraft:stick", "Stick", "", &[], &[]),
+            entry("minecraft:stick", "Stick", "[custom_name='a']", &[], &[]),
+            entry("minecraft:stick", "Stick", "[custom_name='b']", &[], &[]),
+            entry("minecraft:oak_log", "Oak Log", "", &[], &[]),
+        ]);
+        let folded = shown(&browser.handle(Event::SetGrouping(true), false, &[]));
+        assert_eq!(folded.len(), 3);
+        assert_eq!(browser.shown_group(0), Some((3, false)));
+        assert_eq!(browser.shown_group(1), None);
+        let open = shown(&browser.handle(Event::ToggleGroup(0), false, &[]));
+        assert_eq!(open.len(), 5);
+        assert_eq!(browser.shown_group(0), Some((3, true)));
+        assert_eq!(browser.shown_group(1), None);
+        let closed = shown(&browser.handle(Event::ToggleGroup(0), false, &[]));
+        assert_eq!(closed.len(), 3);
     }
 
     #[test]

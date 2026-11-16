@@ -539,6 +539,11 @@ pub(super) fn frame(game: &mut Game<'_>) {
                 false,
                 &[],
             );
+            browser.handle(
+                model::Event::SetGrouping(flag(game, SETTING_GROUPS)),
+                false,
+                &[],
+            );
             // JEI's editable category order: written once with every category, then read.
             match game.native_setting(model::ID, SETTING_CATEGORIES) {
                 Some(text) => browser.load_categories(&text),
@@ -664,6 +669,11 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
                 index: *index as usize,
                 wildcard: game.has_control_down(),
             }
+        }
+        NativePanelEvent::Clicked { index, .. }
+            if game.has_shift_down() && shown_group(*index as usize).is_some() =>
+        {
+            model::Event::ToggleGroup(*index as usize)
         }
         NativePanelEvent::Clicked { index, right } => model::Event::ClickItem {
             index: *index as usize,
@@ -813,6 +823,7 @@ const SETTING_NEW: &str = "mark_new";
 const SETTING_SEEN: &str = "seen_items";
 const SETTING_COUNTS: &str = "tooltip_counts";
 const SETTING_HIGHLIGHT: &str = "highlight_inventory";
+const SETTING_GROUPS: &str = "group_variants";
 const SETTING_TRADES: &str = "trades";
 const SETTING_RECENT_ITEMS: &str = "recent_items";
 
@@ -938,6 +949,7 @@ fn settings() -> Vec<Setting> {
         Setting::Flag(SETTING_NEW, "Mark newly found items"),
         Setting::Flag(SETTING_COUNTS, "Recipe and use counts in tooltips"),
         Setting::Flag(SETTING_HIGHLIGHT, "Search dims other inventory items"),
+        Setting::Flag(SETTING_GROUPS, "Fold item variants into groups"),
         Setting::Report,
         Setting::Flag(SETTING_MOD_NAMES, "Mod name in tooltips"),
         Setting::Flag(SETTING_CURSOR, "Cheat items in Creative go to the cursor"),
@@ -993,6 +1005,7 @@ pub(super) fn settings_click(game: &mut Game<'_>, button: usize) {
             match key {
                 SETTING_EDIT => model::Event::SetEditMode(on),
                 SETTING_SPOILER => model::Event::SetSpoilerFree(on),
+                SETTING_GROUPS => model::Event::SetGrouping(on),
                 _ => return,
             }
         }
@@ -1322,4 +1335,10 @@ pub(super) fn highlight(item: &str) -> Option<bool> {
         return None;
     }
     with_browser(|browser| browser.in_results(item)).flatten()
+}
+
+/// The variant group whose first entry is list entry `index`: its size and whether it
+/// is unfolded.
+pub(super) fn shown_group(index: usize) -> Option<(usize, bool)> {
+    with_browser(|browser| browser.shown_group(index)).flatten()
 }
