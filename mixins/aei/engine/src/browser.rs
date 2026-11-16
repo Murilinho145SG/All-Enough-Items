@@ -18,6 +18,7 @@ mod details;
 mod discovery;
 mod history;
 mod listing;
+mod perf;
 mod plan;
 mod recipes;
 mod report;
