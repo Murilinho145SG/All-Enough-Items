@@ -405,6 +405,8 @@ fn category_title(game: &Game<'_>, station: &str) -> String {
         "minecraft:emerald" => "Trading".into(),
         "minecraft:iron_pickaxe" => "Block Drops".into(),
         "minecraft:bucket" => "Fluids".into(),
+        "minecraft:iron_sword" => "Mob Drops".into(),
+        "minecraft:chest" => "Loot".into(),
         _ => "Brewing".into(),
     }
 }

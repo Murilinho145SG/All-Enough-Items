@@ -663,38 +663,135 @@ fn block_drops(game: &Game<'_>, items: &[NativeItem]) -> Vec<model::Recipe> {
         };
         let mut drops = Vec::new();
         loot_items(&json, &mut drops);
-        if drops.iter().all(|d| *d == native.id) {
-            continue;
+        // One card per drop; the block itself (silk touch) is left out.
+        for drop in drops.iter().filter(|d| **d != native.id) {
+            if let Some(&output) = index.get(drop.as_str()) {
+                recipes.push(loot_recipe(
+                    model::RecipeKind::Drop,
+                    format!("aei:drops/{}#{drop}", native.id),
+                    i,
+                    output,
+                ));
+            }
         }
-        // What the block turns into first; the block itself (silk touch) last.
-        drops.sort_by_key(|d| *d == native.id);
-        let outputs: Vec<model::Ingredient> = drops
-            .iter()
-            .filter_map(|d| index.get(d.as_str()))
-            .map(|&item| model::Ingredient {
-                item,
-                count: 1,
-                components: String::new(),
-            })
-            .collect();
-        if outputs.is_empty() {
-            continue;
+    }
+    recipes
+}
+
+/// A loot card: `input` (a block, a mob's egg, a chest) gives `output`.
+fn loot_recipe(kind: model::RecipeKind, id: String, input: usize, output: usize) -> model::Recipe {
+    let one = |item| model::Ingredient {
+        item,
+        count: 1,
+        components: String::new(),
+    };
+    model::Recipe {
+        id,
+        kind,
+        width: 1,
+        height: 1,
+        inputs: vec![vec![one(input)]],
+        outputs: vec![one(output)],
+        ticks: 0,
+        experience: 0.0,
+        book_id: -1,
+    }
+}
+
+/// Every loot table file under `dir`, with its path below it (no `.json`).
+fn loot_files(dir: &std::path::Path, prefix: &str, out: &mut Vec<(String, serde_json::Value)>) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut entries: Vec<_> = entries.flatten().collect();
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+    for entry in entries {
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if path.is_dir() {
+            loot_files(&path, &format!("{prefix}{name}/"), out);
+        } else if let Some(stem) = name.strip_suffix(".json")
+            && let Some(json) = std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|text| serde_json::from_str(&text).ok())
+        {
+            out.push((format!("{prefix}{stem}"), json));
         }
-        recipes.push(model::Recipe {
-            id: format!("aei:drops/{}", native.id),
-            kind: model::RecipeKind::Drop,
-            width: 1,
-            height: 1,
-            inputs: vec![vec![model::Ingredient {
-                item: i,
-                count: 1,
-                components: String::new(),
-            }]],
-            outputs,
-            ticks: 0,
-            experience: 0.0,
-            book_id: -1,
-        });
+    }
+}
+
+/// Beyond JEI: what mobs drop (each mob shown as its spawn egg) and what the other loot
+/// tables give (chests, barrels, archaeology, fishing, bartering, shearing), read from
+/// the loot tables in the game's resource folder; one card per item.
+fn world_loot(items: &[NativeItem]) -> Vec<model::Recipe> {
+    let Some(root) = resource_root() else {
+        return Vec::new();
+    };
+    let index: std::collections::HashMap<&str, usize> = items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| (item.id.as_str(), i))
+        .collect();
+    let mut recipes = Vec::new();
+    for namespace in std::fs::read_dir(root.join("data"))
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        let ns = namespace.file_name().to_string_lossy().into_owned();
+        let tables = namespace.path().join("loot_table");
+        // Mobs: `entities/<mob>.json`, or `entities/<mob>/<variant>.json` (sheep wool).
+        let mut mobs = Vec::new();
+        loot_files(&tables.join("entities"), "", &mut mobs);
+        for (path, json) in &mobs {
+            let mob = path.split('/').next().unwrap_or(path);
+            let Some(&egg) = index.get(format!("{ns}:{mob}_spawn_egg").as_str()) else {
+                continue;
+            };
+            let mut drops = Vec::new();
+            loot_items(json, &mut drops);
+            for drop in &drops {
+                if let Some(&output) = index.get(drop.as_str()) {
+                    recipes.push(loot_recipe(
+                        model::RecipeKind::MobDrop,
+                        format!("aei:mob/{ns}:{path}#{drop}"),
+                        egg,
+                        output,
+                    ));
+                }
+            }
+        }
+        // Other tables, each under what finds it.
+        for folder in ["chests", "barrels", "archaeology", "gameplay", "shearing"] {
+            let mut files = Vec::new();
+            loot_files(&tables.join(folder), &format!("{folder}/"), &mut files);
+            for (path, json) in &files {
+                let finder = match path.as_str() {
+                    p if p.starts_with("barrels/") => "minecraft:barrel",
+                    p if p.starts_with("archaeology/") => "minecraft:brush",
+                    p if p.starts_with("shearing/") => "minecraft:shears",
+                    p if p.starts_with("gameplay/fishing") => "minecraft:fishing_rod",
+                    "gameplay/piglin_bartering" => "minecraft:gold_ingot",
+                    "gameplay/sniffer_digging" => "minecraft:sniffer_egg",
+                    _ => "minecraft:chest",
+                };
+                let Some(&input) = index.get(finder) else {
+                    continue;
+                };
+                let mut drops = Vec::new();
+                loot_items(json, &mut drops);
+                for drop in &drops {
+                    if let Some(&output) = index.get(drop.as_str()) {
+                        recipes.push(loot_recipe(
+                            model::RecipeKind::Loot,
+                            format!("aei:loot/{path}#{drop}"),
+                            input,
+                            output,
+                        ));
+                    }
+                }
+            }
+        }
     }
     recipes
 }
@@ -896,6 +993,7 @@ pub(super) fn frame(game: &mut Game<'_>) {
             recipes.extend(fuels_and_compostables(game, &tables.items));
             recipes.extend(anvil_recipes(game, &tables.items));
             recipes.extend(block_drops(game, &tables.items));
+            recipes.extend(world_loot(&tables.items));
             recipes.extend(fluid_recipes(game, &tables.items));
             let mut items: Vec<model::ItemInfo> = tables.items.iter().map(item).collect();
             items.extend(
@@ -1188,6 +1286,15 @@ pub(super) fn slot_lines(card: usize, slot: usize, output: bool, advanced: bool)
             }
         } else if let Some(tag) = browser.shown_slot_tag(card, slot) {
             lines.push(format!("\u{a7}7Accepts any: #{tag}"));
+        }
+        // A loot card names its table on both slots.
+        if let Some(id) = browser.shown_recipe_id(card)
+            && let Some((table, _)) = id
+                .strip_prefix("aei:loot/")
+                .or_else(|| id.strip_prefix("aei:mob/"))
+                .and_then(|rest| rest.split_once('#'))
+        {
+            lines.push(format!("\u{a7}7Loot table: {table}"));
         }
         lines
     })

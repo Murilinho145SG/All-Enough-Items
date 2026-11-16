@@ -152,8 +152,14 @@ impl Browser {
                     .all(|&r| gives_back(&self.recipes[r], i))
             })
             .collect();
-        // A block that drops something is found in the world: a raw material too.
-        for recipe in self.recipes.iter().filter(|r| r.kind == RecipeKind::Drop) {
+        // A block that drops something, a mob and a chest are found in the world: raw
+        // materials too.
+        for recipe in self.recipes.iter().filter(|r| {
+            matches!(
+                r.kind,
+                RecipeKind::Drop | RecipeKind::MobDrop | RecipeKind::Loot
+            )
+        }) {
             for input in recipe.inputs.iter().flatten() {
                 if let Some(r) = reached.get_mut(input.item) {
                     *r = true;

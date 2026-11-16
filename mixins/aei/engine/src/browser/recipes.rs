@@ -279,6 +279,8 @@ impl Browser {
             RecipeKind::Trade => (Layout::Smithing, 2, 1, String::new()),
             RecipeKind::Drop => (Layout::Single, 1, 1, String::new()),
             RecipeKind::Fluid => (Layout::Smithing, 2, 1, String::new()),
+            RecipeKind::MobDrop => (Layout::Single, 1, 1, String::new()),
+            RecipeKind::Loot => (Layout::Single, 1, 1, loot_note(&recipe.id)),
             RecipeKind::Brewing => (Layout::Brewing, 2, 1, String::new()),
         };
         let place_enabled = (recipe.book_id >= 0).then(|| known.contains(&recipe.book_id));
@@ -299,8 +301,33 @@ impl Browser {
     }
 }
 
+/// A loot card's note: its table without the folder, as words
+/// (`aei:loot/chests/village/village_weaponsmith#...` reads "village weaponsmith").
+fn loot_note(id: &str) -> String {
+    let table = id
+        .strip_prefix("aei:loot/")
+        .unwrap_or(id)
+        .split('#')
+        .next()
+        .unwrap_or_default();
+    let name = table.rsplit('/').next().unwrap_or(table);
+    name.replace('_', " ")
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn loot_notes_name_the_table() {
+        assert_eq!(
+            super::loot_note("aei:loot/chests/village/village_weaponsmith#minecraft:iron_ingot"),
+            "village weaponsmith"
+        );
+        assert_eq!(
+            super::loot_note("aei:loot/gameplay/fishing#minecraft:cod"),
+            "fishing"
+        );
+    }
+
     #[test]
     fn cooking_notes_read_like_jei() {
         assert_eq!(super::cooking_note(200, 0.1), "0.1 XP\n10s");

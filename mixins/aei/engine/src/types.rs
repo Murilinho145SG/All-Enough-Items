@@ -22,6 +22,12 @@ pub enum RecipeKind {
     /// A fluid used in the world: a bucket or bottle filled, concrete powder set,
     /// water meeting lava.
     Fluid,
+    /// What killing a mob can drop (its loot table's items); the mob shows as its egg.
+    MobDrop,
+    /// What a loot table outside blocks and mobs can give: chests, barrels,
+    /// archaeology, fishing, bartering. The recipe id `aei:loot/<table>#<item>`
+    /// names the table.
+    Loot,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,10 +46,12 @@ pub(crate) enum Station {
     Trade,
     Drop,
     Fluid,
+    MobDrop,
+    Loot,
 }
 
 impl Station {
-    pub(crate) const ALL: [Self; 14] = [
+    pub(crate) const ALL: [Self; 16] = [
         Self::Crafting,
         Self::Smelting,
         Self::Blasting,
@@ -58,6 +66,8 @@ impl Station {
         Self::Trade,
         Self::Drop,
         Self::Fluid,
+        Self::MobDrop,
+        Self::Loot,
     ];
 
     pub(crate) fn of(kind: RecipeKind) -> Self {
@@ -76,6 +86,8 @@ impl Station {
             RecipeKind::Trade => Self::Trade,
             RecipeKind::Drop => Self::Drop,
             RecipeKind::Fluid => Self::Fluid,
+            RecipeKind::MobDrop => Self::MobDrop,
+            RecipeKind::Loot => Self::Loot,
         }
     }
 
@@ -95,6 +107,8 @@ impl Station {
             Self::Trade => "minecraft:emerald",
             Self::Drop => "minecraft:iron_pickaxe",
             Self::Fluid => "minecraft:bucket",
+            Self::MobDrop => "minecraft:iron_sword",
+            Self::Loot => "minecraft:chest",
         }
     }
 }

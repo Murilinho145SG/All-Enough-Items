@@ -68,9 +68,10 @@ through Horizon's native mod system.
   and bottles filled, concrete powder set, water meeting lava. (Their icons use
   Horizon's single per-game mod image, so another native mod drawing its own
   image would replace them.)
-- Beyond JEI, a Block Drops category lists what breaking each block can drop
-  (read from its loot table), for blocks that drop something other than
-  themselves.
+- Beyond JEI, loot categories read the game's loot tables: Block Drops (what
+  breaking a block gives besides itself), Mob Drops (each mob as its spawn egg)
+  and Loot (chests, barrels, archaeology, fishing, bartering, shearing), one card
+  per item, with the table named in the slot tooltips.
 - Beyond JEI, every villager offer you see on a trading screen is kept (per
   instance) as a recipe of a Trading category: the costs, an arrow, the result.
 - For modpack makers, the settings page writes `report.md` in AEI's mod data
