@@ -1951,6 +1951,18 @@ impl Game<'_> {
         true
     }
 
+    /// The recipe card under the pointer when it isn't over one of its slots.
+    pub(in crate::game) fn aei_hovered_card(&mut self) -> Option<usize> {
+        let batch = self.browser_batch()?;
+        active(self)?;
+        let view = screen(self, &batch, true)?.view?;
+        let cursor = self.cursor;
+        view.cards.iter().find_map(|(i, card)| {
+            let on_slot = card.slots.iter().any(|(_, r)| viewer::contains(*r, cursor));
+            (viewer::contains(card.area, cursor) && !on_slot).then_some(*i)
+        })
+    }
+
     /// Puts `text` in AEI's search field and searches it, as typing would.
     pub(in crate::game) fn aei_set_search(&mut self, text: &str) {
         let Some(search) = self.panel.search.as_mut() else {

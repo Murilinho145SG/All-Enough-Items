@@ -1289,3 +1289,14 @@ pub(super) fn tooltip_counts(item: &str) -> Option<String> {
     let (made, used) = with_browser(|browser| browser.counts(item)).flatten()?;
     Some(format!("\u{a7}8R: {made} recipes \u{b7} U: {used} uses"))
 }
+
+/// Ctrl+C over a recipe card: the recipe as Markdown on the clipboard.
+pub(super) fn copy_recipe(game: &mut Game<'_>, card: usize) -> bool {
+    use horizon_client::clipboard::Clipboard;
+    let Some(text) = with_browser(|browser| browser.recipe_text(card)).flatten() else {
+        return false;
+    };
+    game.clipboard.set(&text);
+    game.message = Some(("Copied the recipe".to_owned(), std::time::Instant::now()));
+    true
+}

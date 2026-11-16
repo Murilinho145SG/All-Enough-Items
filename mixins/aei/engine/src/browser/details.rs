@@ -108,3 +108,98 @@ mod tests {
         assert!(browser.details(&missing).is_none());
     }
 }
+
+impl Browser {
+    /// Card `card` of the shown page as Markdown, for the clipboard: its result, its
+    /// category and id, then its ingredients counted (a tag where a slot takes any).
+    pub fn recipe_text(&self, card: usize) -> Option<String> {
+        let &id = self.shown_recipe_ids.get(card)?;
+        let recipe = &self.recipes[id];
+        let name = |item: usize| self.items.get(item).map_or("?", |i| i.name.as_str());
+        let output = recipe.outputs.first()?;
+        let category = crate::Station::of(recipe.kind)
+            .icon()
+            .trim_start_matches("minecraft:")
+            .replace('_', " ");
+        let mut text = format!(
+            "**{} \u{d7} {}** ({category}",
+            name(output.item),
+            output.count
+        );
+        if !recipe.id.is_empty() {
+            text.push_str(&format!(", `{}`", recipe.id));
+        }
+        text.push_str(")\n");
+        // Each ingredient once, with how many the recipe takes.
+        let mut lines: Vec<(String, u32)> = Vec::new();
+        for (slot, alternatives) in recipe.inputs.iter().enumerate() {
+            let Some(first) = alternatives.first() else {
+                continue;
+            };
+            let label = match self.shown_slot_tag(card, slot) {
+                Some(tag) => format!("any `#{tag}`"),
+                None => name(first.item).to_owned(),
+            };
+            match lines.iter_mut().find(|(l, _)| *l == label) {
+                Some((_, n)) => *n += first.count.max(1),
+                None => lines.push((label, first.count.max(1))),
+            }
+        }
+        for (label, count) in lines {
+            text.push_str(&format!("- {count} \u{d7} {label}\n"));
+        }
+        Some(text)
+    }
+}
+
+#[cfg(test)]
+mod recipe_text_tests {
+    use crate::{Browser, Event, Ingredient, ItemInfo, Recipe, RecipeKind, Stack};
+
+    #[test]
+    fn a_recipe_copies_as_markdown_with_counted_ingredients() {
+        let item = |id: &str, name: &str| ItemInfo {
+            id: id.into(),
+            name: name.into(),
+            tags: vec![],
+        };
+        let items = vec![
+            item("minecraft:planks", "Planks"),
+            item("minecraft:stick", "Stick"),
+        ];
+        let one = |item| Ingredient {
+            item,
+            count: 1,
+            components: String::new(),
+        };
+        let recipe = Recipe {
+            id: "minecraft:stick".into(),
+            kind: RecipeKind::Shaped,
+            width: 1,
+            height: 2,
+            inputs: vec![vec![one(0)], vec![one(0)]],
+            outputs: vec![Ingredient { count: 4, ..one(1) }],
+            ticks: 0,
+            experience: 0.0,
+            book_id: -1,
+        };
+        let (mut browser, _) = Browser::new(items, vec![recipe]);
+        let stick = Stack {
+            id: "minecraft:stick".into(),
+            count: 1,
+            components: String::new(),
+        };
+        browser.handle(
+            Event::Lookup {
+                stack: stick,
+                uses: false,
+            },
+            false,
+            &[],
+        );
+        assert_eq!(
+            browser.recipe_text(0).unwrap(),
+            "**Stick \u{d7} 4** (crafting table, `minecraft:stick`)\n- 2 \u{d7} Planks\n"
+        );
+    }
+}

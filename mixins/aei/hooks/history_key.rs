@@ -3,6 +3,15 @@ fn aei_history_key(game: &mut crate::game::Game<'_>, key: &str) -> std::ops::Con
         return std::ops::ControlFlow::Break(());
     }
     if game.title.is_none()
+        && key == "key.keyboard.c"
+        && game.has_control_down()
+        && !game.mod_browser_typing()
+        && let Some(card) = game.aei_hovered_card()
+        && crate::game::aei_glue::copy_recipe(game, card)
+    {
+        return std::ops::ControlFlow::Break(());
+    }
+    if game.title.is_none()
         && key == "key.keyboard.o"
         && game.has_control_down()
         && !game.mod_browser_typing()

@@ -89,7 +89,9 @@ through Horizon's native mod system.
   otherwise AEI sends `/give`, which the server only allows with permission.
   A stack dropped on the list on the creative screen is deleted.
 - Over any item, **Ctrl+C** copies its id and **Ctrl+Shift+C** a `/give`
-  command for that exact stack, components included.
+  command for that exact stack, components included. Over a recipe card (off
+  its slots), Ctrl+C copies the recipe as Markdown: result, category, id and
+  ingredients counted.
 - Press **Ctrl+F** to focus the search field. While typing, **Up** and **Down**
   recall earlier searches (kept when you press Enter or open an item from them).
 - Scroll or click arrows to turn pages. Right-click the search field to clear it.
