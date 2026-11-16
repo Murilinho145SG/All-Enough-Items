@@ -2380,8 +2380,11 @@ pub(super) fn pointed(game: &mut Game<'_>) -> ControlFlow<Option<BrowserStack>> 
                 });
                 ControlFlow::Break(stack)
             }
-            // Over the container itself, Horizon finds the slot's stack.
-            None => ControlFlow::Continue(()),
+            // Over the screen itself: any slot that holds an item.
+            None => match game.aei_slot_stack() {
+                Some(stack) => ControlFlow::Break(Some(stack)),
+                None => ControlFlow::Continue(()),
+            },
         },
     }
 }
@@ -2689,6 +2692,29 @@ impl Game<'_> {
     /// AEI's high-contrast theme (an option).
     pub(in crate::game) fn aei_set_high_contrast(&self, on: bool) {
         paint::set_high_contrast(on);
+    }
+
+    /// The item in whatever slot is under the pointer on the open screen: the menu's
+    /// own slots (inventory, container, armour, off hand, crafting grid and result),
+    /// and on the creative screen its tab's grid and its inventory tab. AEI's keys (R,
+    /// U, A, T, I, Ctrl+C) read it over any slot.
+    pub(in crate::game) fn aei_slot_stack(&mut self) -> Option<BrowserStack> {
+        use horizon_client::creative::Creative;
+        let batch = self.browser_batch()?;
+        let slot = self.slot_at(&batch, self.cursor.0, self.cursor.1)?;
+        let stack = if self.screen == crate::game::Screen::Creative && slot >= Creative::DISPLAY {
+            // An item tab's grid: the cell's item, scrolled.
+            let first = self.creative_screen.first_row(&self.pack.names);
+            self.creative_screen
+                .shown(&self.pack.names, first * 9 + slot - Creative::DISPLAY)?
+        } else {
+            self.slot_view(slot)?
+        };
+        Some(BrowserStack {
+            item: stack.item.to_string(),
+            count: stack.count,
+            components: crate::game::native_recipes::components(&stack),
+        })
     }
 
     /// AEI's dark theme (an option).
