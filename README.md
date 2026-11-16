@@ -66,6 +66,9 @@ through Horizon's native mod system.
 - For modpack makers, the settings page writes `report.md` in AEI's mod data
   folder: recipe counts by category, items no recipe makes or uses, and
   crafting recipes whose ingredients make different results.
+- Beyond JEI, **Tab** puts a keyboard focus on the item list (search field
+  unfocused): the arrows move it across pages, Enter opens the focused item's
+  recipes and R, U, A, T and I act on it; Escape leaves it.
 - With the game's narrator on, every item cell AEI draws (list, bookmarks,
   recipes) is read out by its name and count.
 - Two more options beyond JEI, off by default: spoiler-free mode lists only items

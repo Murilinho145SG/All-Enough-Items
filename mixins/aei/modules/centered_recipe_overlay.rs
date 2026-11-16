@@ -28,6 +28,8 @@ struct Navigation {
 thread_local! {
     static ITEM_SCROLL: RefCell<i32> = const { RefCell::new(0) };
     static BOOKMARK_PAGE: RefCell<usize> = const { RefCell::new(0) };
+    /// Keyboard focus in the item list (Tab): the focused entry's index.
+    static KB_FOCUS: RefCell<Option<usize>> = const { RefCell::new(None) };
     /// The material calculator while it is open: its targets (a shopping list) with
     /// their counts, and the one the count buttons change.
     static PLAN: RefCell<Option<(Vec<(BrowserStack, u32)>, usize)>> = const { RefCell::new(None) };
@@ -696,6 +698,14 @@ fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, items: &Sidebar, layout
         let (x, y) = layout.slot(offset);
         let rect = [x, y, viewer::SLOT, viewer::SLOT];
         draw_stack(game, batch, stack, rect, &format!("Item {index}"), true);
+        if KB_FOCUS.with(|cell| *cell.borrow()) == Some(index) {
+            let [x, y, w, h] = rect;
+            let gold = rgba(255, 200, 40, 255);
+            paint::fill(game, batch, [x, y, w, 1.0], gold);
+            paint::fill(game, batch, [x, y + h - 1.0, w, 1.0], gold);
+            paint::fill(game, batch, [x, y, 1.0, h], gold);
+            paint::fill(game, batch, [x + w - 1.0, y, 1.0, h], gold);
+        }
         if let Some((_, open)) = crate::game::aei_glue::shown_group(index) {
             // A group of variants: "+" folded, "-" unfolded, in the top left corner.
             let [x, y, _, _] = rect;
@@ -1794,6 +1804,12 @@ pub(super) fn pointed(game: &mut Game<'_>) -> ControlFlow<Option<BrowserStack>> 
     if owned(game).is_none() {
         return ControlFlow::Continue(());
     }
+    // Keyboard focus: the keys act on the focused entry.
+    if let Some(index) = KB_FOCUS.with(|cell| *cell.borrow())
+        && let Some(stack) = game.panel_shown().and_then(|shown| shown.items.get(index))
+    {
+        return ControlFlow::Break(Some(stack.clone()));
+    }
     let Some(batch) = game.browser_batch() else {
         return ControlFlow::Continue(());
     };
@@ -1903,6 +1919,13 @@ fn scroll(game: &Game<'_>, amount: f64) -> bool {
 }
 
 pub(super) fn back(game: &mut Game<'_>) -> ControlFlow<bool> {
+    // Escape leaves keyboard focus first.
+    if owned(game).is_some()
+        && game.panel.recipes.is_none()
+        && KB_FOCUS.with(|cell| cell.borrow_mut().take()).is_some()
+    {
+        return ControlFlow::Break(true);
+    }
     // Escape closes the details panel and the calculator first.
     if owned(game).is_some() && DETAILS.with(|cell| cell.borrow_mut().take()).is_some() {
         return ControlFlow::Break(true);
@@ -1920,6 +1943,62 @@ pub(super) fn back(game: &mut Game<'_>) -> ControlFlow<bool> {
 
 impl Game<'_> {
     /// Opens the material calculator for `stack` (the T key).
+    /// Keyboard navigation of the item list: Tab turns focus on and off, the arrows
+    /// move it (turning pages at the edges), Enter opens the focused item's recipes.
+    /// True when the key was used.
+    pub(in crate::game) fn aei_list_key(&mut self, key: &str) -> bool {
+        if owned(self).is_none() || self.mod_browser_typing() || self.panel.recipes.is_some() {
+            return false;
+        }
+        let Some(batch) = self.browser_batch() else {
+            return false;
+        };
+        let Some((_, layout)) = screen(self, &batch, false).and_then(|s| s.items) else {
+            return false;
+        };
+        let count = self.panel.stacks.len();
+        let focus = KB_FOCUS.with(|cell| *cell.borrow());
+        let per_page = layout.per_page().max(1);
+        let columns = layout.columns.max(1) as i64;
+        let first = self.panel.page * per_page;
+        let moved = |by: i64| -> Option<usize> {
+            let index = focus? as i64 + by;
+            (0..count as i64).contains(&index).then_some(index as usize)
+        };
+        let next = match key {
+            "key.keyboard.tab" => {
+                let on = focus.is_none() && count > 0;
+                KB_FOCUS.with(|cell| *cell.borrow_mut() = on.then_some(first.min(count - 1)));
+                return true;
+            }
+            _ if focus.is_none() => return false,
+            "key.keyboard.left" => moved(-1),
+            "key.keyboard.right" => moved(1),
+            "key.keyboard.up" => moved(-columns),
+            "key.keyboard.down" => moved(columns),
+            "key.keyboard.enter" | "key.keyboard.keypad.enter" => {
+                let Some(owner) = owned(self) else {
+                    return false;
+                };
+                let index = focus.unwrap_or_default() as u32;
+                self.panel_event(
+                    &owner,
+                    BrowserEvent::Clicked {
+                        index,
+                        right: false,
+                    },
+                );
+                return true;
+            }
+            _ => return false,
+        };
+        if let Some(index) = next {
+            KB_FOCUS.with(|cell| *cell.borrow_mut() = Some(index));
+            self.panel.page = index / per_page;
+        }
+        true
+    }
+
     /// AEI's dark theme (an option).
     pub(in crate::game) fn aei_set_dark(&self, on: bool) {
         paint::set_dark(on);
