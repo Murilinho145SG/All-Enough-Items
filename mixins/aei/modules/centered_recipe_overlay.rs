@@ -1130,7 +1130,7 @@ fn draw_details(game: &mut Game<'_>, batch: &mut HudBatch, view: &DetailsView) {
         ly += 11.0;
     }
     if !view.tags.is_empty() {
-        let text = "Tags (click to list their items):";
+        let text = "Tags (click: their items; right-click: recipes taking any):";
         batch.text(atlas, text, x + 6.0, ly + 3.0, label_colour, false);
     }
     paint::action_button(game, batch, view.note, "Edit note", true, "Edit note");
@@ -1932,7 +1932,12 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
             .find(|(_, rect)| viewer::contains(*rect, game.cursor))
         {
             DETAILS.with(|cell| *cell.borrow_mut() = None);
-            game.aei_set_search(&format!("${tag}"));
+            if right {
+                let tag = tag.clone();
+                crate::game::aei_glue::tag_uses(game, &tag);
+            } else {
+                game.aei_set_search(&format!("${tag}"));
+            }
             return ControlFlow::Break(true);
         }
         if viewer::contains(details.note, game.cursor) {

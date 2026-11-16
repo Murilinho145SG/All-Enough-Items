@@ -190,6 +190,24 @@ impl Browser {
                 .filter(|&id| self.shows_category(self.recipes[id].kind))
                 .collect();
         }
+        // A tag's uses: the recipes with a slot taking exactly the tag's items.
+        if let Some(tag) = &lookup.tag {
+            let Some(members) = self.tag_members.get(tag) else {
+                return Vec::new();
+            };
+            return (0..self.recipes.len())
+                .filter(|&id| self.shows_category(self.recipes[id].kind))
+                .filter(|&id| self.recipe_unlocked(id))
+                .filter(|&id| {
+                    self.recipes[id].inputs.iter().any(|slot| {
+                        let mut items: Vec<usize> = slot.iter().map(|i| i.item).collect();
+                        items.sort_unstable();
+                        items.dedup();
+                        items == *members
+                    })
+                })
+                .collect();
+        }
         let Some(&item) = self.by_id.get(&lookup.item.id) else {
             return Vec::new();
         };

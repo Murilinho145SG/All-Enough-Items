@@ -398,6 +398,8 @@ pub enum Event {
     },
     SelectStation(usize),
     ShowCategory,
+    /// The recipes with an input slot that takes any item of this tag.
+    TagUses(String),
     Place(usize),
     Back,
     Forward,
@@ -429,4 +431,7 @@ pub(crate) struct Lookup {
     pub item: Stack,
     pub uses: bool,
     pub station: usize,
+    /// The recipes with a slot taking any item of this tag (JEI's "Accepts any"), in
+    /// place of `item`'s.
+    pub tag: Option<String>,
 }

@@ -177,6 +177,7 @@ impl Browser {
             item: output.clone(),
             uses: false,
             station: 0,
+            tag: None,
         };
         let ids = self.page_recipe_ids(&lookup);
         if ids.is_empty() {

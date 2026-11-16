@@ -61,7 +61,8 @@ through Horizon's native mod system.
   now into the open grid through the vanilla recipe book, one craft per click.
 - Beyond JEI, press **I** over an item for its details: id, mod, English name,
   stack size, durability, food, rarity, creative tabs, how many recipes make and
-  use it, its components and its tags. Click a tag to list its items. Its
+  use it, its components and its tags. Click a tag to list its items, or
+  right-click it for the recipes that take any of them. Its
   **Edit note** button lets you type a note for the item in the search field
   (Enter saves it, Escape cancels); the note shows in the details from then on.
 - Water and lava are listed after the items, as JEI lists fluids; cheat mode

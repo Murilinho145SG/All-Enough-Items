@@ -203,6 +203,8 @@ impl Browser {
             .map_or(lookup.item.id.as_str(), |item| item.name.as_str());
         let title = if let Some(category) = lookup.category {
             format!("All: {}", category.icon())
+        } else if let Some(tag) = &lookup.tag {
+            format!("Uses: #{tag}")
         } else {
             format!(
                 "{}: {}",
@@ -241,6 +243,7 @@ impl Browser {
             item: target,
             uses,
             station: 0,
+            tag: None,
         };
         if self.page_recipe_ids(&candidate).is_empty() {
             return None;
@@ -465,6 +468,28 @@ impl Browser {
                 }
                 vec![self.render_page(known)]
             }
+            Event::TagUses(tag) => {
+                let Some(first) = self.tag_members.get(&tag).and_then(|m| m.first()) else {
+                    return Vec::new();
+                };
+                let candidate = Lookup {
+                    focus: None,
+                    category: None,
+                    item: Stack {
+                        id: self.items[*first].id.clone(),
+                        count: 1,
+                        components: String::new(),
+                    },
+                    uses: true,
+                    station: 0,
+                    tag: Some(tag),
+                };
+                if self.page_recipe_ids(&candidate).is_empty() {
+                    return Vec::new();
+                }
+                self.history.push(candidate);
+                vec![self.render_page(known)]
+            }
             Event::ShowCategory => {
                 // Already showing every recipe: nothing more to show.
                 if self
@@ -490,6 +515,7 @@ impl Browser {
                     item: Stack::default(),
                     uses: false,
                     station: tab,
+                    tag: None,
                 };
                 self.history.push(candidate);
                 vec![self.render_page(known)]
@@ -1303,6 +1329,56 @@ mod tests {
         assert_eq!(browser.shown_group(1), None);
         let closed = shown(&browser.handle(Event::ToggleGroup(0), false, &[]));
         assert_eq!(closed.len(), 3);
+    }
+
+    #[test]
+    fn a_tag_s_uses_are_the_recipes_taking_any_of_its_items() {
+        let tagged = |id: &str| ItemInfo {
+            id: format!("test:{id}"),
+            name: id.into(),
+            tags: vec!["test:planks".into()],
+        };
+        let items = vec![
+            tagged("oak"),
+            tagged("birch"),
+            ItemInfo {
+                id: "test:chest".into(),
+                name: "chest".into(),
+                tags: vec![],
+            },
+        ];
+        let one = |item| Ingredient {
+            item,
+            count: 1,
+            components: String::new(),
+        };
+        let recipe = |id: &str, slot: Vec<usize>| Recipe {
+            id: id.into(),
+            kind: RecipeKind::Shapeless,
+            width: 0,
+            height: 0,
+            inputs: vec![slot.into_iter().map(one).collect()],
+            outputs: vec![one(2)],
+            ticks: 0,
+            experience: 0.0,
+            book_id: -1,
+        };
+        let recipes = vec![
+            recipe("test:any_planks", vec![0, 1]),
+            recipe("test:oak_only", vec![0]),
+        ];
+        let (mut browser, _) = Browser::new(items, recipes);
+        let updates = browser.handle(Event::TagUses("test:planks".into()), false, &[]);
+        let Some(Update::RecipeList(page)) = updates.first() else {
+            panic!("expected recipes");
+        };
+        assert_eq!(page.title, "Uses: #test:planks");
+        assert_eq!(page.cards.len(), 1);
+        assert!(
+            browser
+                .handle(Event::TagUses("test:none".into()), false, &[])
+                .is_empty()
+        );
     }
 
     #[test]

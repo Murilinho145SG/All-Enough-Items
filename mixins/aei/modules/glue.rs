@@ -2001,3 +2001,23 @@ pub(super) fn import_collection(game: &mut Game<'_>) {
         std::time::Instant::now(),
     ));
 }
+
+/// The recipes that take any item of `tag` (a right-click on a tag in the details).
+pub(super) fn tag_uses(game: &mut Game<'_>, tag: &str) {
+    let known = game.native_known_recipes();
+    let updates = with_browser(|browser| {
+        browser.handle(model::Event::TagUses(tag.to_owned()), false, &known)
+    })
+    .unwrap_or_default();
+    if updates.is_empty() {
+        game.message = Some((
+            format!("No recipe takes any #{tag}"),
+            std::time::Instant::now(),
+        ));
+        return;
+    }
+    game.aei_reset_viewer();
+    for update in updates {
+        publish(game, update);
+    }
+}
