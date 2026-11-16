@@ -2280,6 +2280,36 @@ impl Game<'_> {
         true
     }
 
+    /// A controller in an inventory has no AEI keys, so two of its inventory buttons stand
+    /// in over an AEI entry: View (the game's throw-one) bookmarks it, and the left stick
+    /// click (throw-all) opens the material calculator. A, X and B already click,
+    /// right-click and go back; the right stick turns pages. True when AEI took it.
+    pub(in crate::game) fn aei_pad_button(
+        &mut self,
+        button: horizon_client::gamepad::Button,
+        down: bool,
+    ) -> bool {
+        use horizon_client::gamepad::Button;
+        let mapping = match button {
+            Button::Select => crate::game::aei::KEY_BOOKMARK,
+            Button::LeftStick => crate::game::aei::KEY_PLAN,
+            _ => return false,
+        };
+        if !down || self.title.is_some() || self.prompt_open() {
+            return false;
+        }
+        let Some(owner) = owned(self) else {
+            return false;
+        };
+        // On the slots of the inventory the buttons keep throwing items.
+        let ControlFlow::Break(Some(stack)) = pointed(self) else {
+            return false;
+        };
+        let key = self.native_mod_key(crate::game::aei::ID, mapping[0], mapping[2]);
+        self.panel_event(&owner, BrowserEvent::Key { key, stack });
+        true
+    }
+
     /// Whether a note is being typed in the search field (its text isn't a search).
     pub(in crate::game) fn aei_editing_note(&self) -> bool {
         NOTE_EDIT.with(|cell| cell.borrow().is_some())

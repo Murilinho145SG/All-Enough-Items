@@ -160,6 +160,18 @@ bindings = [
 ]
 
 [[injection]]
+id = "pad_button"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client::game::pad_menu::Game<'_>::pad_menu_button"
+helper = "hooks/pad_button.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "button", ty = "horizon_client::gamepad::Button", value = "button" },
+  { name = "down", ty = "bool", value = "down" },
+]
+
+[[injection]]
 id = "history_key"
 kind = "HEAD"
 cancellable = true

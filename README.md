@@ -80,6 +80,9 @@ through Horizon's native mod system.
 - Beyond JEI, **Tab** puts a keyboard focus on the item list (search field
   unfocused): the arrows move it across pages, Enter opens the focused item's
   recipes and R, U, A, T and I act on it; Escape leaves it.
+- With a controller, Horizon's inventory pointer hops between AEI's cells: A
+  shows recipes, X uses, B goes back and the right stick turns pages; over an
+  AEI entry, View bookmarks it and the left stick click opens the calculator.
 - With the game's narrator on, every item cell AEI draws (list, bookmarks,
   recipes) is read out by its name and count.
 - Two more options beyond JEI, off by default: spoiler-free mode lists only items
