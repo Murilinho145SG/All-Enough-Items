@@ -66,6 +66,8 @@ pub struct Browser {
     trades: Vec<trades::Trade>,
     /// The player's notes, by item id.
     notes: HashMap<String, String>,
+    /// Item tags no item fills (from the tag files), for the report.
+    empty_tags: Vec<String>,
     /// Earlier searches, oldest first, and the one Up/Down recalled last.
     search_history: Vec<String>,
     history_cursor: Option<usize>,

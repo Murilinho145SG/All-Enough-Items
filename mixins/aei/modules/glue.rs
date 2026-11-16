@@ -557,6 +557,54 @@ fn resource_root() -> Option<std::path::PathBuf> {
     None
 }
 
+/// The item tag files of every namespace in the game's resource folder: each tag's id
+/// and its `values` (`#` before nested tags; an optional entry's `id`).
+fn item_tag_files() -> std::collections::HashMap<String, Vec<String>> {
+    fn walk(
+        dir: &std::path::Path,
+        prefix: &str,
+        namespace: &str,
+        out: &mut std::collections::HashMap<String, Vec<String>>,
+    ) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if path.is_dir() {
+                walk(&path, &format!("{prefix}{name}/"), namespace, out);
+            } else if let Some(stem) = name.strip_suffix(".json")
+                && let Some(json) = std::fs::read_to_string(&path)
+                    .ok()
+                    .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+            {
+                let values = json["values"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|value| value.as_str().or_else(|| value["id"].as_str()))
+                    .map(str::to_owned)
+                    .collect();
+                out.insert(format!("{namespace}:{prefix}{stem}"), values);
+            }
+        }
+    }
+    let mut out = std::collections::HashMap::new();
+    let Some(root) = resource_root() else {
+        return out;
+    };
+    for namespace in std::fs::read_dir(root.join("data"))
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        let name = namespace.file_name().to_string_lossy().into_owned();
+        walk(&namespace.path().join("tags/item"), "", &name, &mut out);
+    }
+    out
+}
+
 /// Every item a loot table's entries can give (`minecraft:item` entries, nested ones
 /// included).
 fn loot_items(value: &serde_json::Value, out: &mut Vec<String>) {
@@ -1404,7 +1452,11 @@ pub(super) fn settings_click(game: &mut Game<'_>, button: usize) {
         }
         Setting::Report => {
             // Next to AEI's settings, in its mod data folder.
-            if let Some(report) = with_browser(|browser| browser.report()) {
+            let tags = item_tag_files();
+            if let Some(report) = with_browser(|browser| {
+                browser.load_tag_files(&tags);
+                browser.report()
+            }) {
                 game.native_set_setting(model::ID, "report.md", &report);
             }
             return;
