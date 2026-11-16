@@ -6,20 +6,55 @@ use super::Browser;
 use crate::Update;
 
 impl Browser {
-    /// Replaces the found items with the saved `text` (one id per line).
+    /// Replaces the found items with the saved `text`: one id per line, a `*` before
+    /// the ones still new (not looked at yet).
     pub fn load_seen(&mut self, text: &str) {
-        self.seen = text
-            .lines()
-            .filter(|id| id.contains(':'))
-            .map(str::to_owned)
-            .collect();
+        self.seen.clear();
         self.fresh.clear();
+        for line in text.lines() {
+            let (fresh, id) = match line.strip_prefix('*') {
+                Some(id) => (true, id),
+                None => (false, line),
+            };
+            if id.contains(':') {
+                self.seen.insert(id.to_owned());
+                if fresh {
+                    self.fresh.insert(id.to_owned());
+                }
+            }
+        }
     }
 
     pub fn seen_text(&self) -> String {
-        let mut ids: Vec<&String> = self.seen.iter().collect();
+        let mut ids: Vec<&String> = self.seen.union(&self.fresh).collect();
         ids.sort();
-        ids.into_iter().map(|id| format!("{id}\n")).collect()
+        ids.dedup();
+        ids.into_iter()
+            .map(|id| {
+                let mark = if self.fresh.contains(id) { "*" } else { "" };
+                format!("{mark}{id}\n")
+            })
+            .collect()
+    }
+
+    /// From now on, recipes that unlock mark what they make as new (the game sends the
+    /// player's recipes in several parts on joining; those aren't news).
+    pub fn watch_unlocks(&mut self) {
+        self.watch_unlocks = true;
+    }
+
+    /// How many items are new (found or newly unlocked, not looked at yet).
+    pub fn fresh_count(&self) -> usize {
+        self.fresh.len()
+    }
+
+    /// Every item counts as looked at: no new marks are left.
+    pub fn clear_fresh(&mut self) -> Update {
+        self.fresh.clear();
+        for entry in &mut self.indexed {
+            entry.fresh = false;
+        }
+        self.item_list()
     }
 
     /// Notes the inventory's items as found; true when a new one was.
@@ -70,6 +105,22 @@ impl Browser {
     pub(super) fn set_known(&mut self, known: Vec<i32>) -> Vec<Update> {
         if known == self.known {
             return Vec::new();
+        }
+        // What a recipe unlocked now makes is new (not while the game is still sending
+        // the recipes the player had before: see `watch_unlocks`).
+        if self.watch_unlocks {
+            let added: Vec<i32> = known
+                .iter()
+                .copied()
+                .filter(|id| !self.known.contains(id))
+                .collect();
+            for recipe in self.recipes.iter().filter(|r| added.contains(&r.book_id)) {
+                for output in &recipe.outputs {
+                    if let Some(item) = self.items.get(output.item) {
+                        self.fresh.insert(item.id.clone());
+                    }
+                }
+            }
         }
         self.known = known;
         self.refresh_locked();
@@ -166,5 +217,47 @@ mod tests {
             &[1],
         );
         assert!(uses.is_empty());
+    }
+
+    #[test]
+    fn newly_unlocked_recipes_mark_their_items_new_and_marks_are_saved() {
+        let items = ["log", "planks", "stick"]
+            .map(|id| ItemInfo {
+                id: format!("minecraft:{id}"),
+                name: id.into(),
+                tags: vec![],
+            })
+            .to_vec();
+        let one = |item| {
+            vec![Ingredient {
+                item,
+                count: 1,
+                components: String::new(),
+            }]
+        };
+        let recipe = |input, output, book_id| Recipe {
+            id: String::new(),
+            kind: RecipeKind::Shapeless,
+            width: 0,
+            height: 0,
+            inputs: vec![one(input)],
+            outputs: one(output),
+            ticks: 0,
+            experience: 0.0,
+            book_id,
+        };
+        let (mut browser, _) = Browser::new(items, vec![recipe(0, 1, 1), recipe(1, 2, 2)]);
+        // What comes while joining is what the player already had: nothing new.
+        browser.handle(Event::SetKnown(vec![1]), false, &[]);
+        assert_eq!(browser.fresh_count(), 0);
+        browser.watch_unlocks();
+        browser.handle(Event::SetKnown(vec![1, 2]), false, &[]);
+        assert_eq!(browser.fresh_count(), 1);
+        let text = browser.seen_text();
+        assert_eq!(text, "*minecraft:stick\n");
+        let (mut other, _) = Browser::new(Vec::new(), Vec::new());
+        other.load_seen(&text);
+        assert_eq!(other.fresh_count(), 1);
+        assert_eq!(other.seen_text(), text);
     }
 }

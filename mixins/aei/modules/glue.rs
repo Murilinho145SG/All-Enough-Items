@@ -9,6 +9,9 @@ struct Session {
     tables: std::sync::Arc<NativeRecipes>,
     known: std::sync::Arc<[i32]>,
     browser: model::Browser,
+    /// When the session began, and whether unlocks count as news yet.
+    started: std::time::Instant,
+    watching: bool,
 }
 
 /// Ctrl+O hid the overlay; the mod name tooltip line is on. Cached from the settings so
@@ -1096,10 +1099,17 @@ pub(super) fn frame(game: &mut Game<'_>) {
                 tables,
                 known,
                 browser,
+                started: std::time::Instant::now(),
+                watching: false,
             });
             return Some((true, initial));
         }
         let session = session.as_mut()?;
+        // Recipes unlocking count as news once joining has settled.
+        if !session.watching && session.started.elapsed() > std::time::Duration::from_secs(5) {
+            session.browser.watch_unlocks();
+            session.watching = true;
+        }
         // `is:craftable` follows the inventory and the open grid.
         let stacks = game
             .inventory
@@ -2144,5 +2154,20 @@ fn seen_key(game: &Game<'_>) -> String {
     match world_record(game) {
         Some(world) => format!("{SETTING_SEEN}.{world}"),
         None => SETTING_SEEN.to_owned(),
+    }
+}
+
+/// How many items carry the "new" mark, when that option is on (else 0).
+pub(super) fn fresh_count() -> usize {
+    if !MARK_NEW.load(std::sync::atomic::Ordering::Relaxed) {
+        return 0;
+    }
+    with_browser(|browser| browser.fresh_count()).unwrap_or(0)
+}
+
+/// Marks every item as looked at (a right-click on the "New" chip).
+pub(super) fn clear_fresh(game: &mut Game<'_>) {
+    if let Some(update) = with_browser(|browser| browser.clear_fresh()) {
+        publish(game, update);
     }
 }

@@ -71,6 +71,8 @@ pub struct Browser {
     empty_tags: Vec<String>,
     /// The calculator's recipe the player chose for an item (registry index -> recipe).
     plan_choices: HashMap<usize, usize>,
+    /// Whether newly unlocked recipes mark their items new (after joining settles).
+    watch_unlocks: bool,
     /// Earlier searches, oldest first, and the one Up/Down recalled last.
     search_history: Vec<String>,
     history_cursor: Option<usize>,

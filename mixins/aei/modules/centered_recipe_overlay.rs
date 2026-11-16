@@ -70,6 +70,8 @@ enum Chip {
     Saved(usize, String),
     /// Pins the typed search.
     Pin(String),
+    /// The items new to the player (`is:new`), how many.
+    New(usize),
 }
 
 impl Chip {
@@ -77,6 +79,7 @@ impl Chip {
         match self {
             Chip::Saved(_, query) => query.clone(),
             Chip::Pin(_) => "+ Pin search".to_owned(),
+            Chip::New(n) => format!("New ({n})"),
         }
     }
 }
@@ -202,11 +205,18 @@ fn screen(game: &Game<'_>, batch: &HudBatch, recipes: bool) -> Option<Screen> {
     let recent: Vec<_> = recent_stacks.into_iter().zip(cells).collect();
     // Saved searches, and a chip that pins the typed one.
     let saved = crate::game::aei_glue::chips();
-    let mut chips: Vec<Chip> = saved
-        .iter()
-        .enumerate()
-        .map(|(i, q)| Chip::Saved(i, q.clone()))
+    let fresh = crate::game::aei_glue::fresh_count();
+    // The "new" items first, like a tab of their own.
+    let mut chips: Vec<Chip> = (fresh > 0)
+        .then_some(Chip::New(fresh))
+        .into_iter()
         .collect();
+    chips.extend(
+        saved
+            .iter()
+            .enumerate()
+            .map(|(i, q)| Chip::Saved(i, q.clone())),
+    );
     let typed = game
         .panel
         .search
@@ -1568,6 +1578,8 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         let back = match (chip, hovered) {
             (Chip::Pin(_), false) => rgba(40, 70, 40, 220),
             (Chip::Pin(_), true) => rgba(60, 110, 60, 240),
+            (Chip::New(_), false) => rgba(110, 85, 20, 220),
+            (Chip::New(_), true) => rgba(150, 120, 30, 240),
             (_, false) => rgba(50, 50, 70, 220),
             (_, true) => rgba(80, 80, 140, 240),
         };
@@ -1581,6 +1593,7 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         let name = match chip {
             Chip::Saved(i, query) => format!("Search chip {i}: {query}"),
             Chip::Pin(_) => "Pin search".to_owned(),
+            Chip::New(_) => "New items".to_owned(),
         };
         horizon_client::widgets::record(&name, *rect, true);
     }
@@ -2121,6 +2134,8 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
             (Chip::Saved(i, _), true) => crate::game::aei_glue::unpin_chip(game, *i),
             (Chip::Saved(_, query), false) => game.aei_set_search(query),
             (Chip::Pin(query), _) => crate::game::aei_glue::pin_chip(game, query),
+            (Chip::New(_), false) => game.aei_set_search("is:new"),
+            (Chip::New(_), true) => crate::game::aei_glue::clear_fresh(game),
         }
         game.audio
             .play("minecraft:ui.button.click", None, 0.25, 1.0);
