@@ -824,6 +824,7 @@ const SETTING_SEEN: &str = "seen_items";
 const SETTING_COUNTS: &str = "tooltip_counts";
 const SETTING_HIGHLIGHT: &str = "highlight_inventory";
 const SETTING_GROUPS: &str = "group_variants";
+const SETTING_DARK: &str = "dark_theme";
 const SETTING_TRADES: &str = "trades";
 const SETTING_RECENT_ITEMS: &str = "recent_items";
 
@@ -841,6 +842,7 @@ fn load_flags(game: &Game<'_>) {
     MARK_NEW.store(flag(game, SETTING_NEW), Relaxed);
     COUNTS.store(flag(game, SETTING_COUNTS), Relaxed);
     HIGHLIGHT.store(flag(game, SETTING_HIGHLIGHT), Relaxed);
+    game.aei_set_dark(flag(game, SETTING_DARK));
     CENTERED.store(flag(game, SETTING_CENTERED), Relaxed);
     COLUMNS.store(columns(game), Relaxed);
 }
@@ -950,6 +952,7 @@ fn settings() -> Vec<Setting> {
         Setting::Flag(SETTING_COUNTS, "Recipe and use counts in tooltips"),
         Setting::Flag(SETTING_HIGHLIGHT, "Search dims other inventory items"),
         Setting::Flag(SETTING_GROUPS, "Fold item variants into groups"),
+        Setting::Flag(SETTING_DARK, "Dark theme for AEI's windows"),
         Setting::Report,
         Setting::Flag(SETTING_MOD_NAMES, "Mod name in tooltips"),
         Setting::Flag(SETTING_CURSOR, "Cheat items in Creative go to the cursor"),

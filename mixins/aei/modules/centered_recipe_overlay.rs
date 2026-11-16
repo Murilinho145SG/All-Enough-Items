@@ -1906,6 +1906,11 @@ pub(super) fn back(game: &mut Game<'_>) -> ControlFlow<bool> {
 
 impl Game<'_> {
     /// Opens the material calculator for `stack` (the T key).
+    /// AEI's dark theme (an option).
+    pub(in crate::game) fn aei_set_dark(&self, on: bool) {
+        paint::set_dark(on);
+    }
+
     /// The I key: the details panel for `stack`.
     pub(in crate::game) fn aei_open_details(&mut self, stack: BrowserStack) {
         DETAILS.with(|cell| *cell.borrow_mut() = Some(BrowserStack { count: 1, ..stack }));

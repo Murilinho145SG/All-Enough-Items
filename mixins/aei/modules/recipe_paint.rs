@@ -13,8 +13,27 @@ const ARROW_NEXT: &str = "horizon/jei/icons/arrow_next_v2";
 pub(super) const SEARCH_SKIN: &str = "horizon/jei/search_background_v2";
 const SETTINGS_ICON: &str = "horizon/recipes/settings";
 
+/// AEI's dark theme (an option): darker windows, slots and plates.
+static DARK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub(super) fn set_dark(on: bool) {
+    DARK.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn dark() -> bool {
+    DARK.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub(super) fn white() -> u32 {
     rgba(255, 255, 255, 255)
+}
+/// The light bevel of windows, plates and slots.
+fn light() -> u32 {
+    if dark() {
+        rgba(96, 96, 104, 255)
+    } else {
+        white()
+    }
 }
 /// Cook time, experience and other recipe text.
 pub(super) fn grey_text() -> u32 {
@@ -24,16 +43,32 @@ fn black() -> u32 {
     rgba(0, 0, 0, 255)
 }
 fn panel() -> u32 {
-    rgba(198, 198, 198, 255)
+    if dark() {
+        rgba(52, 52, 58, 255)
+    } else {
+        rgba(198, 198, 198, 255)
+    }
 }
 fn shadow() -> u32 {
-    rgba(85, 85, 85, 255)
+    if dark() {
+        rgba(24, 24, 28, 255)
+    } else {
+        rgba(85, 85, 85, 255)
+    }
 }
 fn slot_dark() -> u32 {
-    rgba(55, 55, 55, 255)
+    if dark() {
+        rgba(16, 16, 18, 255)
+    } else {
+        rgba(55, 55, 55, 255)
+    }
 }
 fn slot_fill() -> u32 {
-    rgba(139, 139, 139, 255)
+    if dark() {
+        rgba(72, 72, 80, 255)
+    } else {
+        rgba(139, 139, 139, 255)
+    }
 }
 
 pub(super) fn fill(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: Rect, color: u32) {
@@ -49,9 +84,9 @@ fn dot(game: &Game<'_>, batch: &mut HudBatch, x: f32, y: f32, color: u32) {
 pub(super) fn window(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: Rect) {
     fill(game, batch, [x + 2.0, y + 1.0, w - 4.0, h - 2.0], panel());
     fill(game, batch, [x + 1.0, y + 2.0, w - 2.0, h - 4.0], panel());
-    fill(game, batch, [x + 2.0, y + 1.0, w - 5.0, 2.0], white());
-    fill(game, batch, [x + 1.0, y + 2.0, 2.0, h - 5.0], white());
-    dot(game, batch, x + 3.0, y + 3.0, white());
+    fill(game, batch, [x + 2.0, y + 1.0, w - 5.0, 2.0], light());
+    fill(game, batch, [x + 1.0, y + 2.0, 2.0, h - 5.0], light());
+    dot(game, batch, x + 3.0, y + 3.0, light());
     fill(game, batch, [x + 3.0, y + h - 3.0, w - 5.0, 2.0], shadow());
     fill(game, batch, [x + w - 3.0, y + 3.0, 2.0, h - 5.0], shadow());
     dot(game, batch, x + w - 4.0, y + h - 4.0, shadow());
@@ -73,8 +108,8 @@ pub(super) fn slot(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: Rect) {
     fill(game, batch, [x, y, w, h], slot_fill());
     fill(game, batch, [x, y, w - 1.0, 1.0], slot_dark());
     fill(game, batch, [x, y, 1.0, h - 1.0], slot_dark());
-    fill(game, batch, [x + 1.0, y + h - 1.0, w - 1.0, 1.0], white());
-    fill(game, batch, [x + w - 1.0, y + 1.0, 1.0, h - 1.0], white());
+    fill(game, batch, [x + 1.0, y + h - 1.0, w - 1.0, 1.0], light());
+    fill(game, batch, [x + w - 1.0, y + 1.0, 1.0, h - 1.0], light());
 }
 
 /// The plate under each recipe: a faint grey outline with cut corners and a soft bevel.
@@ -130,8 +165,8 @@ pub(super) fn tab(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: Rect, sel
         [x + 1.0, y + 1.0, w - 2.0, body - 1.0],
         fill_color,
     );
-    fill(game, batch, [x + 2.0, y + 1.0, w - 5.0, 2.0], white());
-    fill(game, batch, [x + 1.0, y + 2.0, 2.0, body - 2.0], white());
+    fill(game, batch, [x + 2.0, y + 1.0, w - 5.0, 2.0], light());
+    fill(game, batch, [x + 1.0, y + 2.0, 2.0, body - 2.0], light());
     fill(
         game,
         batch,
@@ -158,8 +193,8 @@ pub(super) fn tab(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: Rect, sel
 pub(super) fn station_tab(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: Rect, well: Rect) {
     let open = w - 6.0;
     fill(game, batch, [x + 1.0, y + 1.0, w - 1.0, h - 2.0], panel());
-    fill(game, batch, [x + 2.0, y + 1.0, w - 2.0, 2.0], white());
-    fill(game, batch, [x + 1.0, y + 2.0, 2.0, h - 4.0], white());
+    fill(game, batch, [x + 2.0, y + 1.0, w - 2.0, 2.0], light());
+    fill(game, batch, [x + 1.0, y + 2.0, 2.0, h - 4.0], light());
     fill(
         game,
         batch,
@@ -182,7 +217,7 @@ pub(super) fn station_tab(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: R
         game,
         batch,
         [x + open + 1.0, y + h - 3.0, 2.0, 3.0],
-        white(),
+        light(),
     );
     slot(game, batch, well);
 }
@@ -273,8 +308,8 @@ pub(super) fn transfer_button(
     let shade = rgba(56, 56, 56, 255);
     fill(game, batch, [x + 7.0, y + 5.0, 1.0, 5.0], shade);
     fill(game, batch, [x + 5.0, y + 7.0, 5.0, 1.0], shade);
-    fill(game, batch, [x + 6.0, y + 4.0, 1.0, 5.0], white());
-    fill(game, batch, [x + 4.0, y + 6.0, 5.0, 1.0], white());
+    fill(game, batch, [x + 6.0, y + 4.0, 1.0, 5.0], light());
+    fill(game, batch, [x + 4.0, y + 6.0, 5.0, 1.0], light());
     if missing {
         fill(game, batch, rect, rgba(255, 165, 0, 0x80));
     }
