@@ -399,6 +399,12 @@ impl SearchQuery {
 }
 
 impl Browser {
+    /// Whether a search is typed and `item` is among its results (for highlighting
+    /// the inventory). None without a search.
+    pub fn in_results(&self, item: &str) -> Option<bool> {
+        (!self.query.trim().is_empty()).then(|| self.result_ids.contains(item))
+    }
+
     pub(super) fn item_list(&mut self) -> Update {
         let (search, modes) = (&self.search, &self.search_modes);
         // Exact matches first, then the ones only a typo away, each in list order.
@@ -419,6 +425,10 @@ impl Browser {
         }
         exact.extend(fuzzy);
         exact.truncate(ITEM_LIMIT);
+        self.result_ids = exact
+            .iter()
+            .map(|&i| self.catalogue[i].stack.id.clone())
+            .collect();
         self.filtered_items = exact;
         Update::ItemList(
             self.filtered_items

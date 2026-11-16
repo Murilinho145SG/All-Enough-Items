@@ -20,6 +20,7 @@ static RECENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::ne
 static ASSIST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static MARK_NEW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static COUNTS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static HIGHLIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CENTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static COLUMNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(9);
 
@@ -811,6 +812,7 @@ const SETTING_SPOILER: &str = "spoiler_free";
 const SETTING_NEW: &str = "mark_new";
 const SETTING_SEEN: &str = "seen_items";
 const SETTING_COUNTS: &str = "tooltip_counts";
+const SETTING_HIGHLIGHT: &str = "highlight_inventory";
 const SETTING_TRADES: &str = "trades";
 const SETTING_RECENT_ITEMS: &str = "recent_items";
 
@@ -827,6 +829,7 @@ fn load_flags(game: &Game<'_>) {
     ASSIST.store(flag(game, SETTING_ASSIST), Relaxed);
     MARK_NEW.store(flag(game, SETTING_NEW), Relaxed);
     COUNTS.store(flag(game, SETTING_COUNTS), Relaxed);
+    HIGHLIGHT.store(flag(game, SETTING_HIGHLIGHT), Relaxed);
     CENTERED.store(flag(game, SETTING_CENTERED), Relaxed);
     COLUMNS.store(columns(game), Relaxed);
 }
@@ -934,6 +937,7 @@ fn settings() -> Vec<Setting> {
         Setting::Flag(SETTING_SPOILER, "Spoiler-free (only items you found)"),
         Setting::Flag(SETTING_NEW, "Mark newly found items"),
         Setting::Flag(SETTING_COUNTS, "Recipe and use counts in tooltips"),
+        Setting::Flag(SETTING_HIGHLIGHT, "Search dims other inventory items"),
         Setting::Report,
         Setting::Flag(SETTING_MOD_NAMES, "Mod name in tooltips"),
         Setting::Flag(SETTING_CURSOR, "Cheat items in Creative go to the cursor"),
@@ -1310,4 +1314,12 @@ pub(super) fn copy_recipe(game: &mut Game<'_>, card: usize) -> bool {
     game.clipboard.set(&text);
     game.message = Some(("Copied the recipe".to_owned(), std::time::Instant::now()));
     true
+}
+
+/// With that option on and a search typed: whether `item` is among the results.
+pub(super) fn highlight(item: &str) -> Option<bool> {
+    if !HIGHLIGHT.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    with_browser(|browser| browser.in_results(item)).flatten()
 }

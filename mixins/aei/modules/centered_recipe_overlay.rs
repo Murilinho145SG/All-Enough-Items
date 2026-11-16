@@ -1233,6 +1233,24 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         );
         draw_recipes(game, batch, view, &transfers);
     }
+    // Beyond JEI (an option): a search dims the container's other items.
+    if screen.view.is_none() && game.screen == crate::game::Screen::Inventory {
+        let (ox, oy) = game.inventory_origin(batch);
+        for slot in game.slots() {
+            let Some(stack) = game.slot_view(slot) else {
+                continue;
+            };
+            if crate::game::aei_glue::highlight(&stack.item) == Some(false) {
+                let (sx, sy) = game.slot_position(slot);
+                paint::fill(
+                    game,
+                    batch,
+                    [ox + sx, oy + sy, 16.0, 16.0],
+                    rgba(0, 0, 0, 0xA0),
+                );
+            }
+        }
+    }
     if let Some((items, layout)) = &screen.items {
         draw_items(game, batch, items, layout);
     } else if let Some(search) = game.panel.search.as_mut() {

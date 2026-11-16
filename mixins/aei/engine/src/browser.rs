@@ -41,8 +41,9 @@ pub struct Browser {
     /// The item list: every entry the search can show, in display order.
     catalogue: Vec<Entry>,
     indexed: Vec<Indexed>,
-    /// Catalogue indexes of the entries the search shows.
+    /// Catalogue indexes of the entries the search shows, and their item ids.
     filtered_items: Vec<usize>,
+    result_ids: std::collections::HashSet<String>,
     query: String,
     search: SearchQuery,
     /// The items looked up last, newest first.
@@ -1244,6 +1245,16 @@ mod tests {
         );
         assert_eq!(browser.progress("minecraft:stonecutter", &[8]), None);
         assert_eq!(browser.progress("test:none", &[]), None);
+    }
+
+    #[test]
+    fn results_tell_which_items_a_search_keeps() {
+        let (items, recipes) = fixture();
+        let (mut browser, _) = Browser::new(items, recipes);
+        assert_eq!(browser.in_results("minecraft:stick"), None);
+        browser.handle(Event::Search("oak".into()), false, &[]);
+        assert_eq!(browser.in_results("minecraft:oak_log"), Some(true));
+        assert_eq!(browser.in_results("minecraft:stick"), Some(false));
     }
 
     #[test]
