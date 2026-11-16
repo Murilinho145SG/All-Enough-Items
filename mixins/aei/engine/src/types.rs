@@ -17,6 +17,8 @@ pub enum RecipeKind {
     Anvil,
     /// A villager trade the player has seen.
     Trade,
+    /// What breaking a block can drop (its loot table's items).
+    Drop,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -33,10 +35,11 @@ pub(crate) enum Station {
     Compost,
     Anvil,
     Trade,
+    Drop,
 }
 
 impl Station {
-    pub(crate) const ALL: [Self; 12] = [
+    pub(crate) const ALL: [Self; 13] = [
         Self::Crafting,
         Self::Smelting,
         Self::Blasting,
@@ -49,6 +52,7 @@ impl Station {
         Self::Fuel,
         Self::Compost,
         Self::Trade,
+        Self::Drop,
     ];
 
     pub(crate) fn of(kind: RecipeKind) -> Self {
@@ -65,6 +69,7 @@ impl Station {
             RecipeKind::Compost => Self::Compost,
             RecipeKind::Anvil => Self::Anvil,
             RecipeKind::Trade => Self::Trade,
+            RecipeKind::Drop => Self::Drop,
         }
     }
 
@@ -82,6 +87,7 @@ impl Station {
             Self::Compost => "minecraft:composter",
             Self::Anvil => "minecraft:anvil",
             Self::Trade => "minecraft:emerald",
+            Self::Drop => "minecraft:iron_pickaxe",
         }
     }
 }

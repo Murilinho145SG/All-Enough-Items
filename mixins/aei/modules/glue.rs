@@ -346,6 +346,114 @@ fn anvil_recipes(game: &Game<'_>, items: &[NativeItem]) -> Vec<model::Recipe> {
     recipes
 }
 
+/// The game's resource folder, as the launcher passes it (`--resources`).
+fn resource_root() -> Option<std::path::PathBuf> {
+    let mut args = std::env::args();
+    while let Some(arg) = args.next() {
+        if arg == "--resources" {
+            return args.next().map(std::path::PathBuf::from);
+        }
+        if let Some(path) = arg.strip_prefix("--resources=") {
+            return Some(path.into());
+        }
+    }
+    None
+}
+
+/// Every item a loot table's entries can give (`minecraft:item` entries, nested ones
+/// included).
+fn loot_items(value: &serde_json::Value, out: &mut Vec<String>) {
+    match value {
+        serde_json::Value::Object(map) => {
+            if map.get("type").and_then(|t| t.as_str()) == Some("minecraft:item")
+                && let Some(name) = map.get("name").and_then(|n| n.as_str())
+                && !out.iter().any(|known| known == name)
+            {
+                out.push(name.to_owned());
+            }
+            for child in map.values() {
+                loot_items(child, out);
+            }
+        }
+        serde_json::Value::Array(list) => {
+            for child in list {
+                loot_items(child, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Beyond JEI: what breaking each block can drop, read from its loot table, for the
+/// blocks that drop something other than themselves.
+fn block_drops(game: &Game<'_>, items: &[NativeItem]) -> Vec<model::Recipe> {
+    let Some(root) = resource_root() else {
+        return Vec::new();
+    };
+    let registry = game.items();
+    let index: std::collections::HashMap<&str, usize> = items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| (item.id.as_str(), i))
+        .collect();
+    let mut recipes = Vec::new();
+    for (i, native) in items.iter().enumerate() {
+        let Some(state) = registry.get(&native.id).and_then(|info| info.block) else {
+            continue;
+        };
+        let Some(table) = registry.block_loot_table(game.pack.assets.registry, state) else {
+            continue;
+        };
+        let (namespace, path) = table.split_once(':').unwrap_or(("minecraft", &table));
+        let file = root
+            .join("data")
+            .join(namespace)
+            .join("loot_table")
+            .join(format!("{path}.json"));
+        let Some(json) = std::fs::read_to_string(&file)
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+        else {
+            continue;
+        };
+        let mut drops = Vec::new();
+        loot_items(&json, &mut drops);
+        if drops.iter().all(|d| *d == native.id) {
+            continue;
+        }
+        // What the block turns into first; the block itself (silk touch) last.
+        drops.sort_by_key(|d| *d == native.id);
+        let outputs: Vec<model::Ingredient> = drops
+            .iter()
+            .filter_map(|d| index.get(d.as_str()))
+            .map(|&item| model::Ingredient {
+                item,
+                count: 1,
+                components: String::new(),
+            })
+            .collect();
+        if outputs.is_empty() {
+            continue;
+        }
+        recipes.push(model::Recipe {
+            id: format!("aei:drops/{}", native.id),
+            kind: model::RecipeKind::Drop,
+            width: 1,
+            height: 1,
+            inputs: vec![vec![model::Ingredient {
+                item: i,
+                count: 1,
+                components: String::new(),
+            }]],
+            outputs,
+            ticks: 0,
+            experience: 0.0,
+            book_id: -1,
+        });
+    }
+    recipes
+}
+
 /// The chance a compostable item's `layers` provider adds a layer to a composter that
 /// isn't empty (an empty one always takes it): a plain number, vanilla's named
 /// providers, or a weighted list of 0 and 1 layers.
@@ -542,6 +650,7 @@ pub(super) fn frame(game: &mut Game<'_>) {
             let mut recipes: Vec<model::Recipe> = tables.recipes.iter().map(recipe).collect();
             recipes.extend(fuels_and_compostables(game, &tables.items));
             recipes.extend(anvil_recipes(game, &tables.items));
+            recipes.extend(block_drops(game, &tables.items));
             let (mut browser, _) =
                 model::Browser::new(tables.items.iter().map(item).collect(), recipes);
             browser.handle(model::Event::SetSearchModes(search_modes(game)), false, &[]);
