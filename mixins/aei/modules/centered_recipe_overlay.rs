@@ -345,6 +345,20 @@ fn draw_stack(
     // first ':' (`item-3`), so automation keeps stable ids and reads the stack.
     let label = format!("{name}: {} x{}", sent.item, sent.count);
     horizon_client::widgets::record(&label, rect, true);
+    // The narrator reads the item's name (and count), as it reads buttons.
+    horizon_client::widgets::narratable(|| {
+        let mut title = game.pack.names.display_item(&sent.item).to_string();
+        if sent.count > 1 {
+            title.push_str(&format!(", {}", sent.count));
+        }
+        horizon_client::widgets::Narratable::new(
+            horizon_client::widgets::What::Named {
+                title,
+                active: true,
+            },
+            rect,
+        )
+    });
 }
 
 /// The category's title as JEI names it.

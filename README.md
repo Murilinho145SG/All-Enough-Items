@@ -66,6 +66,8 @@ through Horizon's native mod system.
 - For modpack makers, the settings page writes `report.md` in AEI's mod data
   folder: recipe counts by category, items no recipe makes or uses, and
   crafting recipes whose ingredients make different results.
+- With the game's narrator on, every item cell AEI draws (list, bookmarks,
+  recipes) is read out by its name and count.
 - Two more options beyond JEI, off by default: spoiler-free mode lists only items
   that have been in your inventory or that an unlocked recipe makes, and hides
   recipes you haven't unlocked; newly found items get a gold dot until you look
