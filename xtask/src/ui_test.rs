@@ -6,7 +6,7 @@ use crate::Result;
 use serde_json::{Value, json};
 use std::path::Path;
 
-const CHECKS: [&str; 13] = [
+const CHECKS: [&str; 14] = [
     "recipe pages",
     "scroll",
     "categories",
@@ -20,6 +20,7 @@ const CHECKS: [&str; 13] = [
     "overlay toggle",
     "bookmarks",
     "material calculator",
+    "themes",
 ];
 
 #[cfg(not(unix))]
@@ -124,6 +125,23 @@ pub fn run(socket: &Path, out: &Path) -> Result {
     ensure(game.plan_shown()?, "T opens the material calculator")?;
     game.send("key esc tap")?;
     ensure(!game.plan_shown()?, "Escape closes the calculator")?;
+    // Each theme and the compact list keep the recipe window: a screenshot of each, then
+    // the option goes back off.
+    for (option, file) in [
+        ("Dark theme for AEI's windows", "theme-dark.png"),
+        ("High contrast for AEI's windows", "theme-contrast.png"),
+        ("Compact item list (16-px cells)", "compact-list.png"),
+    ] {
+        game.toggle_option(option)?;
+        game.click("Item 4", false)?;
+        ensure(
+            !game.ingredients()?.is_empty(),
+            "a theme keeps the recipe window",
+        )?;
+        game.send(&format!("screenshot {}", out.join(file).display()))?;
+        game.send("key esc tap")?;
+        game.toggle_option(option)?;
+    }
     // Ctrl+O hides the overlay and shows it again.
     for shown in [false, true] {
         game.send("key ctrl down")?;
@@ -202,7 +220,10 @@ impl Game {
 
     fn widgets(&mut self) -> Result<Vec<Value>> {
         // `ui` reflects the last drawn frame: let a key, click or scroll reach one first.
-        self.send("wait 2")?;
+        // A screen that pauses the game (the settings) stops the ticks: wait in time.
+        if self.send("wait 2").is_err() {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+        }
         match self.send("ui")?["widgets"].take() {
             Value::Array(widgets) => Ok(widgets),
             other => Err(format!("ui: no widget list in {other}")),
@@ -298,6 +319,25 @@ impl Game {
             .ok_or_else(|| format!("no widget labelled {label:?}"))?;
         let suffix = if right { " right" } else { "" };
         self.send(&format!("click {id}{suffix}")).map(drop)
+    }
+
+    /// Flips AEI's setting labelled `option` (its label starts so) on the settings page.
+    fn toggle_option(&mut self, option: &str) -> Result {
+        self.send("click aei-settings")?;
+        for _ in 0..12 {
+            let found = self
+                .widgets()?
+                .iter()
+                .find(|w| w["label"].as_str().is_some_and(|l| l.starts_with(option)))
+                .and_then(|w| w["id"].as_str().map(str::to_owned));
+            if let Some(id) = found {
+                self.send(&format!("click {id}"))?;
+                self.send("click done")?;
+                return Ok(());
+            }
+            self.send("scroll-at 320 250 -5")?;
+        }
+        Err(format!("no setting {option:?}"))
     }
 
     fn select_all(&mut self) -> Result {

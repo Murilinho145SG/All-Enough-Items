@@ -16,12 +16,49 @@ const SETTINGS_ICON: &str = "horizon/recipes/settings";
 /// AEI's dark theme (an option): darker windows, slots and plates.
 static DARK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+/// AEI's high-contrast theme (an option, over the dark one): black panels, white bevels
+/// and text.
+static HIGH_CONTRAST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 pub(super) fn set_dark(on: bool) {
     DARK.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
+pub(super) fn set_high_contrast(on: bool) {
+    HIGH_CONTRAST.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn high_contrast() -> bool {
+    HIGH_CONTRAST.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 fn dark() -> bool {
-    DARK.load(std::sync::atomic::Ordering::Relaxed)
+    DARK.load(std::sync::atomic::Ordering::Relaxed) && !high_contrast()
+}
+
+/// A colour for each theme: default, dark, high contrast.
+fn themed(default: u32, dark_one: u32, contrast: u32) -> u32 {
+    if high_contrast() {
+        contrast
+    } else if dark() {
+        dark_one
+    } else {
+        default
+    }
+}
+
+/// Labels on AEI's windows (the details panel's).
+pub(super) fn label_colour() -> u32 {
+    themed(
+        rgba(96, 96, 96, 255),
+        rgba(170, 170, 176, 255),
+        rgba(255, 255, 0, 255),
+    )
+}
+
+/// Text on AEI's windows.
+pub(super) fn text_colour() -> u32 {
+    themed(rgba(48, 48, 48, 255), rgba(224, 224, 230, 255), white())
 }
 
 pub(super) fn white() -> u32 {
@@ -29,46 +66,34 @@ pub(super) fn white() -> u32 {
 }
 /// The light bevel of windows, plates and slots.
 fn light() -> u32 {
-    if dark() {
-        rgba(96, 96, 104, 255)
-    } else {
-        white()
-    }
+    themed(white(), rgba(96, 96, 104, 255), white())
 }
 /// Cook time, experience and other recipe text.
 pub(super) fn grey_text() -> u32 {
-    rgba(128, 128, 128, 255)
+    themed(rgba(128, 128, 128, 255), rgba(150, 150, 156, 255), white())
 }
 fn black() -> u32 {
     rgba(0, 0, 0, 255)
 }
 fn panel() -> u32 {
-    if dark() {
-        rgba(52, 52, 58, 255)
-    } else {
-        rgba(198, 198, 198, 255)
-    }
+    themed(rgba(198, 198, 198, 255), rgba(52, 52, 58, 255), black())
 }
 fn shadow() -> u32 {
-    if dark() {
-        rgba(24, 24, 28, 255)
-    } else {
-        rgba(85, 85, 85, 255)
-    }
+    themed(
+        rgba(85, 85, 85, 255),
+        rgba(24, 24, 28, 255),
+        rgba(170, 170, 170, 255),
+    )
 }
 fn slot_dark() -> u32 {
-    if dark() {
-        rgba(16, 16, 18, 255)
-    } else {
-        rgba(55, 55, 55, 255)
-    }
+    themed(rgba(55, 55, 55, 255), rgba(16, 16, 18, 255), white())
 }
 fn slot_fill() -> u32 {
-    if dark() {
-        rgba(72, 72, 80, 255)
-    } else {
-        rgba(139, 139, 139, 255)
-    }
+    themed(
+        rgba(139, 139, 139, 255),
+        rgba(72, 72, 80, 255),
+        rgba(24, 24, 24, 255),
+    )
 }
 
 pub(super) fn fill(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: Rect, color: u32) {
@@ -114,31 +139,25 @@ pub(super) fn slot(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: Rect) {
 
 /// The plate under each recipe: a faint grey outline with cut corners and a soft bevel.
 pub(super) fn plate(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: Rect) {
-    let outline = rgba(153, 153, 153, 255);
+    let outline = themed(rgba(153, 153, 153, 255), rgba(110, 110, 118, 255), white());
+    let (bevel_light, bevel_shade) = (
+        themed(rgba(216, 216, 216, 255), rgba(80, 80, 88, 255), white()),
+        themed(rgba(179, 179, 179, 255), rgba(40, 40, 46, 255), white()),
+    );
     fill(game, batch, [x + 1.0, y + 1.0, w - 2.0, h - 2.0], panel());
-    fill(
-        game,
-        batch,
-        [x + 2.0, y + 1.0, w - 4.0, 1.0],
-        rgba(216, 216, 216, 255),
-    );
-    fill(
-        game,
-        batch,
-        [x + 1.0, y + 2.0, 1.0, h - 4.0],
-        rgba(216, 216, 216, 255),
-    );
+    fill(game, batch, [x + 2.0, y + 1.0, w - 4.0, 1.0], bevel_light);
+    fill(game, batch, [x + 1.0, y + 2.0, 1.0, h - 4.0], bevel_light);
     fill(
         game,
         batch,
         [x + 2.0, y + h - 2.0, w - 4.0, 1.0],
-        rgba(179, 179, 179, 255),
+        bevel_shade,
     );
     fill(
         game,
         batch,
         [x + w - 2.0, y + 2.0, 1.0, h - 4.0],
-        rgba(179, 179, 179, 255),
+        bevel_shade,
     );
     fill(game, batch, [x + 2.0, y, w - 4.0, 1.0], outline);
     fill(game, batch, [x + 2.0, y + h - 1.0, w - 4.0, 1.0], outline);
@@ -331,7 +350,7 @@ pub(super) fn settings_button(game: &Game<'_>, batch: &mut HudBatch, rect: Rect,
 
 /// The grey crafting arrow, 22 x 16 (24 x 17 for cooking, whose white fill grows over it).
 pub(super) fn arrow(game: &Game<'_>, batch: &mut HudBatch, [x, y, w, h]: Rect) {
-    let color = slot_fill();
+    let color = themed(slot_fill(), slot_fill(), white());
     let mid = (y + h / 2.0).floor();
     let head = x + w - 8.0;
     fill(game, batch, [x, mid - 1.0, head - x, 3.0], color);
@@ -354,7 +373,8 @@ pub(super) fn shapeless(game: &Game<'_>, batch: &mut HudBatch, [x, y, _, _]: Rec
     for (row, line) in MARK.iter().enumerate() {
         for (col, c) in line.chars().enumerate() {
             if c == '#' {
-                dot(game, batch, x + col as f32, y + row as f32, slot_fill());
+                let colour = themed(slot_fill(), slot_fill(), white());
+                dot(game, batch, x + col as f32, y + row as f32, colour);
             }
         }
     }

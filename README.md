@@ -106,7 +106,9 @@ through Horizon's native mod system.
   to its tooltip, a fourth dims the container's items a typed search leaves
   out, and a fifth folds an item's variants (enchanted books, potions) into one
   entry marked "+": Shift+click it to unfold them, and again to fold them. A
-  dark theme darkens AEI's own windows, slots and tabs, another shows an item's
+  dark theme darkens AEI's own windows, slots and tabs (a high-contrast one
+  draws them black with white edges and text, and a compact list uses 16-px
+  cells to fit more items), another shows an item's
   first recipe next to the pointer while Shift is held over it, and another
   keeps the calculator's shopping list on the HUD while you play (close the
   inventory with the calculator open): what it still lacks after the inventory.

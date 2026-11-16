@@ -299,11 +299,22 @@ fn recipe_stack(game: &Game<'_>, recipe: usize, slot: usize) -> Option<BrowserSt
     cycle(alternatives, game).cloned()
 }
 
+/// The item list's `n`th cell on a page: 18 px, or 16 in the compact list.
+fn list_cell(layout: &Layout, n: usize) -> viewer::Rect {
+    let cell = crate::game::aei_glue::list_options().cell;
+    let columns = layout.columns.max(1);
+    [
+        layout.grid.0 + (n % columns) as f32 * cell,
+        layout.grid.1 + (n / columns) as f32 * cell,
+        cell,
+        cell,
+    ]
+}
+
 fn hovered_item(game: &Game<'_>, layout: &Layout) -> Option<(usize, BrowserStack)> {
     let first = game.panel.page * layout.per_page();
     for offset in 0..layout.per_page() {
-        let (x, y) = layout.slot(offset);
-        if inside(game.cursor, [x, y, viewer::SLOT, viewer::SLOT]) {
+        if inside(game.cursor, list_cell(layout, offset)) {
             let index = first + offset;
             let sent = game.panel_shown()?.items.get(index)?.clone();
             // The game resolves items only; a fluid entry is AEI's own.
@@ -943,9 +954,9 @@ fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, items: &Sidebar, layout
     let first = game.panel.page * layout.per_page();
     if crate::game::aei_glue::cheat_mode() {
         // JEI's cheat mode tint behind the list.
-        let (x, y) = layout.slot(0);
-        let w = layout.columns as f32 * viewer::SLOT;
-        let h = layout.rows as f32 * viewer::SLOT;
+        let [x, y, cell, _] = list_cell(layout, 0);
+        let w = layout.columns as f32 * cell;
+        let h = layout.rows as f32 * cell;
         paint::fill(game, batch, [x, y, w, h], rgba(255, 0, 0, 0x30));
     }
     for offset in 0..layout.per_page() {
@@ -953,8 +964,7 @@ fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, items: &Sidebar, layout
         let Some(stack) = game.panel_shown().and_then(|shown| shown.items.get(index)) else {
             break;
         };
-        let (x, y) = layout.slot(offset);
-        let rect = [x, y, viewer::SLOT, viewer::SLOT];
+        let rect = list_cell(layout, offset);
         draw_stack(game, batch, stack, rect, &format!("Item {index}"), true);
         if KB_FOCUS.with(|cell| *cell.borrow()) == Some(index) {
             let [x, y, w, h] = rect;
@@ -1197,8 +1207,8 @@ fn draw_details(game: &mut Game<'_>, batch: &mut HudBatch, view: &DetailsView) {
     draw_stack(game, batch, &view.stack, icon, "Details item", false);
     let atlas = &game.gui.atlas;
     // Dark text on the light panel, as vanilla container titles are.
-    let label_colour = rgba(96, 96, 96, 255);
-    let text_colour = rgba(48, 48, 48, 255);
+    let label_colour = paint::label_colour();
+    let text_colour = paint::text_colour();
     batch.text(
         atlas,
         &view.details.name,
@@ -2605,6 +2615,11 @@ impl Game<'_> {
                 true,
             );
         }
+    }
+
+    /// AEI's high-contrast theme (an option).
+    pub(in crate::game) fn aei_set_high_contrast(&self, on: bool) {
+        paint::set_high_contrast(on);
     }
 
     /// AEI's dark theme (an option).

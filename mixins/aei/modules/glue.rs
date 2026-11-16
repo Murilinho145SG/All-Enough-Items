@@ -26,6 +26,7 @@ static COUNTS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::ne
 static HIGHLIGHT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static PREVIEW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static PLAN_HUD: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static COMPACT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CENTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static COLUMNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(9);
 
@@ -1380,6 +1381,8 @@ pub(super) const CHIPS: usize = 8;
 const SETTING_PINNED: &str = "pinned_recipes";
 const SETTING_PREVIEW: &str = "shift_preview";
 const SETTING_PLAN_HUD: &str = "plan_hud";
+const SETTING_COMPACT: &str = "compact_list";
+const SETTING_CONTRAST: &str = "high_contrast";
 const SETTING_TRADES: &str = "trades";
 const SETTING_RECENT_ITEMS: &str = "recent_items";
 
@@ -1399,6 +1402,8 @@ fn load_flags(game: &Game<'_>) {
     HIGHLIGHT.store(flag(game, SETTING_HIGHLIGHT), Relaxed);
     PREVIEW.store(flag(game, SETTING_PREVIEW), Relaxed);
     PLAN_HUD.store(flag(game, SETTING_PLAN_HUD), Relaxed);
+    COMPACT.store(flag(game, SETTING_COMPACT), Relaxed);
+    game.aei_set_high_contrast(flag(game, SETTING_CONTRAST));
     game.aei_set_dark(flag(game, SETTING_DARK));
     CENTERED.store(flag(game, SETTING_CENTERED), Relaxed);
     COLUMNS.store(columns(game), Relaxed);
@@ -1417,6 +1422,11 @@ pub(super) fn list_options() -> model::viewer::ListOptions {
     model::viewer::ListOptions {
         max_columns: COLUMNS.load(Relaxed),
         centered_search: CENTERED.load(Relaxed),
+        cell: if COMPACT.load(Relaxed) {
+            model::viewer::COMPACT_CELL
+        } else {
+            model::viewer::SLOT
+        },
     }
 }
 
@@ -1519,6 +1529,8 @@ fn settings() -> Vec<Setting> {
         Setting::Flag(SETTING_HIGHLIGHT, "Search dims other inventory items"),
         Setting::Flag(SETTING_GROUPS, "Fold item variants into groups"),
         Setting::Flag(SETTING_DARK, "Dark theme for AEI's windows"),
+        Setting::Flag(SETTING_CONTRAST, "High contrast for AEI's windows"),
+        Setting::Flag(SETTING_COMPACT, "Compact item list (16-px cells)"),
         Setting::Flag(SETTING_PREVIEW, "Shift over an item previews its recipe"),
         Setting::Flag(
             SETTING_PLAN_HUD,

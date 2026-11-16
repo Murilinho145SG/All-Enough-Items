@@ -376,19 +376,25 @@ impl Viewer {
 }
 
 /// JEI's item list options.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ListOptions {
     /// At most this many columns (1 to 9).
     pub max_columns: usize,
     /// The search bar centred under the GUI instead of under the list.
     pub centered_search: bool,
+    /// The list's cell size: [`SLOT`], or [`COMPACT_CELL`] for the compact list.
+    pub cell: f32,
 }
+
+/// The compact item list's cell (an item is 16 px).
+pub const COMPACT_CELL: f32 = 16.0;
 
 impl Default for ListOptions {
     fn default() -> Self {
         Self {
             max_columns: MAX_ITEM_COLUMNS,
             centered_search: false,
+            cell: SLOT,
         }
     }
 }
@@ -433,6 +439,8 @@ pub struct Sidebar {
     pub nav: Rect,
     pub search: Rect,
     pub settings: Rect,
+    /// Each cell's size.
+    pub cell: f32,
 }
 
 impl Sidebar {
@@ -470,9 +478,12 @@ impl Sidebar {
             sw - gui_right - 2.0 * PADDING,
             sh - (BAR + 2.0) - 2.0 * PADDING - search_row,
         ];
-        let max_columns = options.max_columns.clamp(1, MAX_ITEM_COLUMNS);
-        let columns = ((available[2] / SLOT).floor().max(0.0) as usize).min(max_columns);
-        let mut rows = ((available[3] / SLOT).floor().max(0.0) as usize).min(MAX_ITEM_ROWS);
+        let cell = options.cell.clamp(COMPACT_CELL, SLOT);
+        // Smaller cells fit more in the same largest footprint.
+        let scale = |n: usize| (n as f32 * SLOT / cell).floor() as usize;
+        let max_columns = scale(options.max_columns.clamp(1, MAX_ITEM_COLUMNS));
+        let columns = ((available[2] / cell).floor().max(0.0) as usize).min(max_columns);
+        let mut rows = ((available[3] / cell).floor().max(0.0) as usize).min(scale(MAX_ITEM_ROWS));
         if columns < 2 || rows < 1 {
             return None;
         }
@@ -480,7 +491,7 @@ impl Sidebar {
         if items <= columns * rows {
             rows = items.div_ceil(columns).max(1);
         }
-        let width = columns as f32 * SLOT;
+        let width = columns as f32 * cell;
         let x = available[0] + available[2] - width;
         let y = available[1];
         let bottom = sh - PADDING - BAR;
@@ -505,7 +516,18 @@ impl Sidebar {
             nav: [x, y - BAR - 2.0, width, BAR],
             search,
             settings,
+            cell,
         })
+    }
+
+    /// The `n`th cell of a page.
+    pub fn cell(&self, n: usize) -> Rect {
+        [
+            self.grid.0 + (n % self.columns.max(1)) as f32 * self.cell,
+            self.grid.1 + (n / self.columns.max(1)) as f32 * self.cell,
+            self.cell,
+            self.cell,
+        ]
     }
 
     pub fn arrows(&self) -> [Rect; 2] {
@@ -828,6 +850,7 @@ mod tests {
         let narrow = ListOptions {
             max_columns: 5,
             centered_search: false,
+            cell: SLOT,
         };
         let list = Sidebar::with(screen, gui, 1000, narrow).unwrap();
         assert_eq!(list.columns, 5);
@@ -838,6 +861,7 @@ mod tests {
             1000,
             ListOptions {
                 centered_search: true,
+                cell: SLOT,
                 ..ListOptions::default()
             },
         )
@@ -993,5 +1017,25 @@ mod tests {
         assert_eq!(rects[3], None);
         assert_eq!(used, 30.0);
         assert_eq!(super::chip_rows(100.0, 300.0, &[]), (vec![], 0.0));
+    }
+
+    #[test]
+    fn a_compact_list_fits_more_rows_in_smaller_cells() {
+        let normal =
+            super::Sidebar::with([640.0, 360.0], [200.0, 440.0], 10_000, Default::default())
+                .unwrap();
+        let compact = super::Sidebar::with(
+            [640.0, 360.0],
+            [200.0, 440.0],
+            10_000,
+            super::ListOptions {
+                cell: super::COMPACT_CELL,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert!(compact.rows > normal.rows);
+        assert_eq!(compact.cell(1)[0] - compact.cell(0)[0], 16.0);
+        assert_eq!(normal.cell(normal.columns)[1] - normal.cell(0)[1], 18.0);
     }
 }
