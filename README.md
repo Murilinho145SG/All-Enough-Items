@@ -60,7 +60,9 @@ through Horizon's native mod system.
   now into the open grid through the vanilla recipe book, one craft per click.
 - Beyond JEI, press **I** over an item for its details: id, mod, English name,
   stack size, durability, food, rarity, creative tabs, how many recipes make and
-  use it, its components and its tags. Click a tag to list its items.
+  use it, its components and its tags. Click a tag to list its items. Its
+  **Edit note** button lets you type a note for the item in the search field
+  (Enter saves it, Escape cancels); the note shows in the details from then on.
 - Beyond JEI, every villager offer you see on a trading screen is kept (per
   instance) as a recipe of a Trading category: the costs, an arrow, the result.
 - For modpack makers, the settings page writes `report.md` in AEI's mod data

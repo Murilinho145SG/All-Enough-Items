@@ -570,6 +570,10 @@ pub(super) fn frame(game: &mut Game<'_>) {
                 .native_setting(model::ID, SETTING_TRADES)
                 .unwrap_or_default();
             browser.load_trades(&trades);
+            let notes = game
+                .native_setting(model::ID, SETTING_NOTES)
+                .unwrap_or_default();
+            browser.load_notes(&notes);
             browser.handle(model::Event::SetKnown(known.to_vec()), false, &[]);
             browser.handle(
                 model::Event::SetSpoilerFree(flag(game, SETTING_SPOILER)),
@@ -706,6 +710,8 @@ pub(super) fn event(game: &mut Game<'_>, event: &NativePanelEvent) {
         return;
     }
     let event = match event {
+        // A note being typed isn't a search.
+        NativePanelEvent::Search(_) if game.aei_editing_note() => return,
         NativePanelEvent::Search(query) => model::Event::Search(query.clone()),
         NativePanelEvent::Clicked { index, .. } if flag(game, SETTING_EDIT) => {
             model::Event::ToggleHidden {
@@ -868,6 +874,7 @@ const SETTING_COUNTS: &str = "tooltip_counts";
 const SETTING_HIGHLIGHT: &str = "highlight_inventory";
 const SETTING_GROUPS: &str = "group_variants";
 const SETTING_DARK: &str = "dark_theme";
+const SETTING_NOTES: &str = "notes";
 const SETTING_TRADES: &str = "trades";
 const SETTING_RECENT_ITEMS: &str = "recent_items";
 
@@ -1155,6 +1162,9 @@ pub(super) fn search_key(game: &mut Game<'_>, key: &str) -> bool {
         "key.keyboard.up" => true,
         "key.keyboard.down" => false,
         "key.keyboard.enter" | "key.keyboard.keypad.enter" => {
+            if game.aei_finish_note() {
+                return true;
+            }
             save_search_history(game, |browser| browser.remember_search());
             return false;
         }
@@ -1387,4 +1397,20 @@ pub(super) fn highlight(item: &str) -> Option<bool> {
 /// is unfolded.
 pub(super) fn shown_group(index: usize) -> Option<(usize, bool)> {
     with_browser(|browser| browser.shown_group(index)).flatten()
+}
+
+/// The player's note on `item`.
+pub(super) fn note(item: &str) -> Option<String> {
+    with_browser(|browser| browser.note(item).map(str::to_owned)).flatten()
+}
+
+/// Saves the note on `item` (a blank one removes it).
+pub(super) fn save_note(game: &mut Game<'_>, item: &str, note: &str) {
+    if let Some(text) = with_browser(|browser| {
+        browser.set_note(item, note);
+        browser.notes_text()
+    }) {
+        game.native_set_setting(model::ID, SETTING_NOTES, &text);
+        game.message = Some(("Note saved".to_owned(), std::time::Instant::now()));
+    }
 }

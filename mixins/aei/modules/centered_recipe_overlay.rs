@@ -35,6 +35,8 @@ thread_local! {
     static PLAN: RefCell<Option<(Vec<(BrowserStack, u32)>, usize)>> = const { RefCell::new(None) };
     /// The item whose details panel is open (the I key).
     static DETAILS: RefCell<Option<BrowserStack>> = const { RefCell::new(None) };
+    /// A note being typed in the search field: the item, and the search to restore.
+    static NOTE_EDIT: RefCell<Option<(String, String)>> = const { RefCell::new(None) };
     /// The bookmark a left press went down on: its release clicks it, or moves it to
     /// the bookmark it is released over (JEI's drag to reorder).
     static BOOKMARK_DRAG: RefCell<Option<usize>> = const { RefCell::new(None) };
@@ -745,6 +747,19 @@ fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, items: &Sidebar, layout
     paint::arrow_button(game, batch, back, false, pages > 1, "Previous item page");
     paint::arrow_button(game, batch, forward, true, pages > 1, "Next item page");
 
+    if let Some((item, _)) = NOTE_EDIT.with(|cell| cell.borrow().clone()) {
+        let name = game.pack.names.display_item(&item).to_string();
+        let [x, y, _, _] = items.search;
+        let hint = format!("Note on {name}: Enter saves, Esc cancels");
+        batch.text(
+            &game.gui.atlas,
+            &hint,
+            x,
+            y - 10.0,
+            rgba(255, 255, 160, 255),
+            true,
+        );
+    }
     let unmatched = game.panel.stacks.is_empty();
     let search = game.browser_search(layout);
     search.suggestion = None;
@@ -858,6 +873,8 @@ struct DetailsView {
     details: crate::game::aei::Details,
     area: viewer::Rect,
     tags: Vec<(String, viewer::Rect)>,
+    /// The "Edit note" button.
+    note: viewer::Rect,
 }
 
 impl DetailsView {
@@ -884,11 +901,18 @@ impl DetailsView {
             tags.push((tag.clone(), [cx, cy, width, 12.0]));
             cx += width + 3.0;
         }
+        let note = [
+            x + w - 6.0 - 60.0,
+            y + h - 6.0 - viewer::BUTTON,
+            60.0,
+            viewer::BUTTON,
+        ];
         Some(Self {
             stack,
             details,
             area,
             tags,
+            note,
         })
     }
 }
@@ -940,6 +964,7 @@ fn draw_details(game: &mut Game<'_>, batch: &mut HudBatch, view: &DetailsView) {
         let text = "Tags (click to list their items):";
         batch.text(atlas, text, x + 6.0, ly + 3.0, label_colour, false);
     }
+    paint::action_button(game, batch, view.note, "Edit note", true, "Edit note");
     for (tag, rect) in &view.tags {
         let hovered = viewer::contains(*rect, game.cursor);
         let back = if hovered {
@@ -1715,6 +1740,24 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
             game.aei_set_search(&format!("${tag}"));
             return ControlFlow::Break(true);
         }
+        if viewer::contains(details.note, game.cursor) {
+            DETAILS.with(|cell| *cell.borrow_mut() = None);
+            let item = details.stack.item.clone();
+            let note = crate::game::aei_glue::note(&item).unwrap_or_default();
+            let query = game
+                .panel
+                .search
+                .as_ref()
+                .map(|s| s.value.clone())
+                .unwrap_or_default();
+            NOTE_EDIT.with(|cell| *cell.borrow_mut() = Some((item, query)));
+            if let Some(search) = game.panel.search.as_mut() {
+                search.set_value(&note);
+                search.focused = true;
+                search.reset_blink();
+            }
+            return ControlFlow::Break(true);
+        }
         if viewer::contains(details.area, game.cursor) {
             return ControlFlow::Break(true);
         }
@@ -1933,6 +1976,13 @@ fn scroll(game: &Game<'_>, amount: f64) -> bool {
 }
 
 pub(super) fn back(game: &mut Game<'_>) -> ControlFlow<bool> {
+    // Escape cancels a note being typed: the search comes back.
+    if owned(game).is_some()
+        && let Some((_, query)) = NOTE_EDIT.with(|cell| cell.borrow_mut().take())
+    {
+        game.aei_set_search(&query);
+        return ControlFlow::Break(true);
+    }
     // Escape leaves keyboard focus first.
     if owned(game).is_some()
         && game.panel.recipes.is_none()
@@ -2010,6 +2060,28 @@ impl Game<'_> {
             KB_FOCUS.with(|cell| *cell.borrow_mut() = Some(index));
             self.panel.page = index / per_page;
         }
+        true
+    }
+
+    /// Whether a note is being typed in the search field (its text isn't a search).
+    pub(in crate::game) fn aei_editing_note(&self) -> bool {
+        NOTE_EDIT.with(|cell| cell.borrow().is_some())
+    }
+
+    /// Enter while typing a note: saves it and brings the search back. True when a
+    /// note was being typed.
+    pub(in crate::game) fn aei_finish_note(&mut self) -> bool {
+        let Some((item, query)) = NOTE_EDIT.with(|cell| cell.borrow_mut().take()) else {
+            return false;
+        };
+        let text = self
+            .panel
+            .search
+            .as_ref()
+            .map(|s| s.value.clone())
+            .unwrap_or_default();
+        crate::game::aei_glue::save_note(self, &item, &text);
+        self.aei_set_search(&query);
         true
     }
 

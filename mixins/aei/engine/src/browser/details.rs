@@ -13,6 +13,41 @@ pub struct Details {
 }
 
 impl Browser {
+    /// The player's note on `item`, if any.
+    pub fn note(&self, item: &str) -> Option<&str> {
+        self.notes.get(item).map(String::as_str)
+    }
+
+    /// Sets (or, when blank, removes) the note on `item`.
+    pub fn set_note(&mut self, item: &str, note: &str) {
+        let note = note.trim();
+        if note.is_empty() {
+            self.notes.remove(item);
+        } else {
+            self.notes.insert(item.to_owned(), note.to_owned());
+        }
+    }
+
+    /// The notes as text, one `id<TAB>note` per line, sorted.
+    pub fn notes_text(&self) -> String {
+        let mut lines: Vec<String> = self
+            .notes
+            .iter()
+            .map(|(id, note)| format!("{id}\t{note}\n"))
+            .collect();
+        lines.sort();
+        lines.concat()
+    }
+
+    pub fn load_notes(&mut self, text: &str) {
+        self.notes = text
+            .lines()
+            .filter_map(|line| line.split_once('\t'))
+            .filter(|(id, note)| id.contains(':') && !note.trim().is_empty())
+            .map(|(id, note)| (id.to_owned(), note.trim().to_owned()))
+            .collect();
+    }
+
     /// How many recipes make and use `item` (by id).
     pub fn counts(&self, item: &str) -> Option<(usize, usize)> {
         let &i = self.by_id.get(item)?;
@@ -64,6 +99,9 @@ impl Browser {
         ));
         if !stack.components.is_empty() {
             lines.push(("Components".to_owned(), stack.components.clone()));
+        }
+        if let Some(note) = self.notes.get(&stack.id) {
+            lines.push(("Note".to_owned(), note.clone()));
         }
         let mut tags = info.tags.clone();
         tags.sort();

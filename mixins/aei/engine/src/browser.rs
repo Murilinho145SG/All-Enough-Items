@@ -64,6 +64,8 @@ pub struct Browser {
     spoiler_free: bool,
     /// Villager trades seen on trading screens (their recipes follow the others).
     trades: Vec<trades::Trade>,
+    /// The player's notes, by item id.
+    notes: HashMap<String, String>,
     /// Earlier searches, oldest first, and the one Up/Down recalled last.
     search_history: Vec<String>,
     history_cursor: Option<usize>,
