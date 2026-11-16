@@ -17,7 +17,8 @@ through Horizon's native mod system.
   letters or more (exact matches come first). Filters narrow the list:
   `is:food`, `is:block`, `is:enchantable`, `is:tool`, `is:craftable` (what one
   recipe makes from the inventory in the open grid, updated as it changes),
-  `has:recipe`, `no:recipe`,
+  `is:craftable2` (the same after one intermediate craft, such as planks
+  first), `has:recipe`, `no:recipe`,
   `rarity:epic`, and numbers with `stack`, `dur` and `nutrition` (`stack:1`,
   `dur>500`, `nutrition<4`).
 - Press **Ctrl+O** to hide or show the overlay (remembered between sessions).

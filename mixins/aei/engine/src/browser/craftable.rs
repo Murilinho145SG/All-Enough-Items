@@ -21,8 +21,10 @@ impl Browser {
         let craftable: Vec<bool> = (0..self.items.len())
             .map(|item| self.craftable(item, &stock))
             .collect();
+        let craftable2 = self.craftable_after_one_step(&stock, &craftable);
         for entry in &mut self.indexed {
             entry.craftable = entry.item.is_some_and(|i| craftable[i]);
+            entry.craftable2 = entry.item.is_some_and(|i| craftable2[i]);
         }
         let found = self.discover();
         for (entry, listed) in self.indexed.iter_mut().zip(&self.catalogue) {
@@ -49,6 +51,77 @@ impl Browser {
             (book >= 0 && known.contains(&book) && self.recipe_craftable(step.recipe, &stock))
                 .then_some(book)
         })
+    }
+
+    /// `is:craftable2`: the items craftable now, or once one intermediate crafting
+    /// recipe the stock covers has been crafted (as many times as its stock allows, up
+    /// to a stack), its results added to the stock.
+    fn craftable_after_one_step(&self, stock: &HashMap<usize, u32>, now: &[bool]) -> Vec<bool> {
+        let mut found = now.to_vec();
+        let steps: Vec<usize> = (0..self.recipes.len())
+            .filter(|&id| self.recipe_craftable(id, stock))
+            .collect();
+        if steps.is_empty() {
+            return found;
+        }
+        // The crafting recipes using each item, to try only those an intermediate feeds.
+        let mut uses: HashMap<usize, Vec<usize>> = HashMap::new();
+        for (id, recipe) in self.recipes.iter().enumerate() {
+            if !matches!(recipe.kind, RecipeKind::Shaped | RecipeKind::Shapeless) {
+                continue;
+            }
+            for item in recipe.inputs.iter().flatten().map(|i| i.item) {
+                let list = uses.entry(item).or_default();
+                if list.last() != Some(&id) {
+                    list.push(id);
+                }
+            }
+        }
+        for step in steps {
+            let mut fed: Vec<usize> = self.recipes[step]
+                .outputs
+                .iter()
+                .filter_map(|o| uses.get(&o.item))
+                .flatten()
+                .copied()
+                .collect();
+            fed.sort_unstable();
+            fed.dedup();
+            let mut left = stock.clone();
+            // Up to nine crafts of the intermediate (a 3x3 of its result).
+            for _ in 0..9 {
+                if !self.recipe_craftable(step, &left) {
+                    break;
+                }
+                self.spend(step, &mut left);
+                for &id in &fed {
+                    if self.recipe_craftable(id, &left) {
+                        for output in &self.recipes[id].outputs {
+                            if let Some(f) = found.get_mut(output.item) {
+                                *f = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        found
+    }
+
+    /// Crafts recipe `id` once from `stock`: its inputs taken, its results added.
+    fn spend(&self, id: usize, stock: &mut HashMap<usize, u32>) {
+        let recipe = &self.recipes[id];
+        for slot in recipe.inputs.iter().filter(|s| !s.is_empty()) {
+            if let Some(choice) = slot
+                .iter()
+                .find(|c| stock.get(&c.item).copied().unwrap_or(0) >= c.count.max(1))
+            {
+                *stock.entry(choice.item).or_default() -= choice.count.max(1);
+            }
+        }
+        for output in &recipe.outputs {
+            *stock.entry(output.item).or_default() += output.count.max(1);
+        }
     }
 
     /// Whether one crafting recipe for `item` fits the grid and the stock covers it.
@@ -162,5 +235,55 @@ mod tests {
         assert_eq!(browser.next_book_step(&plan, &[5]), Some(5));
         browser.handle(inventory(9, 2), false, &[]);
         assert_eq!(browser.next_book_step(&plan, &[5]), None);
+    }
+
+    #[test]
+    fn craftable2_allows_one_intermediate_craft() {
+        let items = ["log", "planks", "stick"]
+            .map(|id| ItemInfo {
+                id: format!("minecraft:{id}"),
+                name: id.into(),
+                tags: vec![],
+            })
+            .to_vec();
+        let ing = |item, count| Ingredient {
+            item,
+            count,
+            components: String::new(),
+        };
+        let recipe = |w, h, inputs: Vec<Vec<Ingredient>>, output| Recipe {
+            id: String::new(),
+            kind: RecipeKind::Shaped,
+            width: w,
+            height: h,
+            inputs,
+            outputs: vec![output],
+            ticks: 0,
+            experience: 0.0,
+            book_id: -1,
+        };
+        // A log makes 4 planks; 2 planks make sticks.
+        let recipes = vec![
+            recipe(1, 1, vec![vec![ing(0, 1)]], ing(1, 4)),
+            recipe(1, 2, vec![vec![ing(1, 1)], vec![ing(1, 1)]], ing(2, 4)),
+        ];
+        let (mut browser, _) = Browser::new(items, recipes);
+        let shown = |updates: Vec<Update>| match updates.first() {
+            Some(Update::ItemList(list)) => list.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
+            _ => panic!("expected item list"),
+        };
+        let log = || Event::SetInventory {
+            stacks: vec![stack("log", 1)],
+            grid: 2,
+        };
+        browser.handle(Event::Search("is:craftable".into()), false, &[]);
+        assert_eq!(
+            shown(browser.handle(log(), false, &[])),
+            ["minecraft:planks"]
+        );
+        assert_eq!(
+            shown(browser.handle(Event::Search("is:craftable2".into()), false, &[])),
+            ["minecraft:planks", "minecraft:stick"]
+        );
     }
 }

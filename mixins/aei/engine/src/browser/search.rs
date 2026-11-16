@@ -70,6 +70,8 @@ pub(super) struct Indexed {
     pub(super) item: Option<usize>,
     /// The inventory holds what one of its crafting recipes needs, in the open grid.
     pub(super) craftable: bool,
+    /// Craftable after one intermediate craft (`is:craftable2`).
+    pub(super) craftable2: bool,
     /// Found this session and not looked at yet.
     pub(super) fresh: bool,
 }
@@ -155,6 +157,7 @@ impl Indexed {
             has_recipe,
             item: None,
             craftable: false,
+            craftable2: false,
             fresh: false,
         }
     }
@@ -197,6 +200,7 @@ impl Indexed {
                 "tool" | "damageable" => p.durability > 0,
                 "stackable" => p.max_stack > 1,
                 "craftable" => self.craftable,
+                "craftable2" => self.craftable2,
                 "new" => self.fresh,
                 _ => false,
             },
@@ -262,7 +266,7 @@ impl SearchQuery {
         self.groups
             .iter()
             .flatten()
-            .any(|term| matches!(&term.filter, Some(Filter::Is(what)) if what == "craftable"))
+            .any(|term| matches!(&term.filter, Some(Filter::Is(what)) if what == "craftable" || what == "craftable2"))
     }
 
     pub(super) fn parse(query: &str, modes: &SearchModes) -> Self {
