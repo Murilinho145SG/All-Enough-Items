@@ -66,7 +66,8 @@ through Horizon's native mod system.
 - Two more options beyond JEI, off by default: spoiler-free mode lists only items
   that have been in your inventory or that an unlocked recipe makes, and hides
   recipes you haven't unlocked; newly found items get a gold dot until you look
-  them up (`is:new` lists them).
+  them up (`is:new` lists them). A third adds each item's recipe and use counts
+  to its tooltip.
 - An optional row at the bottom left holds the nine items looked up last (off by
   default; saved per instance).
 - Beyond JEI, the last ten lookups line up above the category tabs as a

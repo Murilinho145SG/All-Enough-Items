@@ -13,6 +13,15 @@ pub struct Details {
 }
 
 impl Browser {
+    /// How many recipes make and use `item` (by id).
+    pub fn counts(&self, item: &str) -> Option<(usize, usize)> {
+        let &i = self.by_id.get(item)?;
+        Some((
+            self.recipe_index.produced_by(i).len(),
+            self.recipe_index.used_by(i),
+        ))
+    }
+
     /// The details of `stack`, or None for an item the registry doesn't have.
     pub fn details(&self, stack: &Stack) -> Option<Details> {
         let &item = self.by_id.get(&stack.id)?;

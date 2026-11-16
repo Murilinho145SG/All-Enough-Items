@@ -19,6 +19,7 @@ static CHEAT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new
 static RECENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static ASSIST: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static MARK_NEW: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static COUNTS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static CENTERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static COLUMNS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(9);
 
@@ -809,6 +810,7 @@ const SETTING_ASSIST: &str = "assisted_crafting";
 const SETTING_SPOILER: &str = "spoiler_free";
 const SETTING_NEW: &str = "mark_new";
 const SETTING_SEEN: &str = "seen_items";
+const SETTING_COUNTS: &str = "tooltip_counts";
 const SETTING_TRADES: &str = "trades";
 const SETTING_RECENT_ITEMS: &str = "recent_items";
 
@@ -824,6 +826,7 @@ fn load_flags(game: &Game<'_>) {
     RECENT.store(flag(game, SETTING_RECENT), Relaxed);
     ASSIST.store(flag(game, SETTING_ASSIST), Relaxed);
     MARK_NEW.store(flag(game, SETTING_NEW), Relaxed);
+    COUNTS.store(flag(game, SETTING_COUNTS), Relaxed);
     CENTERED.store(flag(game, SETTING_CENTERED), Relaxed);
     COLUMNS.store(columns(game), Relaxed);
 }
@@ -928,6 +931,7 @@ fn settings() -> Vec<Setting> {
         Setting::Flag(SETTING_ASSIST, "Calculator places the next step"),
         Setting::Flag(SETTING_SPOILER, "Spoiler-free (only items you found)"),
         Setting::Flag(SETTING_NEW, "Mark newly found items"),
+        Setting::Flag(SETTING_COUNTS, "Recipe and use counts in tooltips"),
         Setting::Flag(SETTING_MOD_NAMES, "Mod name in tooltips"),
         Setting::Flag(SETTING_CURSOR, "Cheat items in Creative go to the cursor"),
     ];
@@ -1275,4 +1279,13 @@ pub(super) fn world_key(game: &mut Game<'_>, key: &str) {
     for update in updates {
         publish(game, update);
     }
+}
+
+/// The tooltip line with an item's recipe and use counts, when that option is on.
+pub(super) fn tooltip_counts(item: &str) -> Option<String> {
+    if !COUNTS.load(std::sync::atomic::Ordering::Relaxed) {
+        return None;
+    }
+    let (made, used) = with_browser(|browser| browser.counts(item)).flatten()?;
+    Some(format!("\u{a7}8R: {made} recipes \u{b7} U: {used} uses"))
 }
