@@ -1030,8 +1030,11 @@ pub(super) fn frame(game: &mut Game<'_>) {
                 .native_setting(model::ID, SETTING_RECENT_ITEMS)
                 .unwrap_or_default();
             browser.load_recent(&recent);
+            // What the player has seen, per world (a world new to AEI starts from
+            // the record kept before records were per world).
             let seen = game
-                .native_setting(model::ID, SETTING_SEEN)
+                .native_setting(model::ID, &seen_key(game))
+                .or_else(|| game.native_setting(model::ID, SETTING_SEEN))
                 .unwrap_or_default();
             browser.load_seen(&seen);
             let trades = game
@@ -1136,7 +1139,7 @@ pub(super) fn frame(game: &mut Game<'_>) {
         }
         let seen = session.browser.seen_text();
         if SAVED_SEEN.with(|saved| *saved.borrow() != seen) {
-            game.native_set_setting(model::ID, SETTING_SEEN, &seen);
+            game.native_set_setting(model::ID, &seen_key(game), &seen);
             SAVED_SEEN.with(|saved| *saved.borrow_mut() = seen);
         }
         if let Some(model::Update::ItemList(items)) = changed.into_iter().next() {
@@ -2107,4 +2110,39 @@ pub(super) fn cycle_plan_recipe(game: &mut Game<'_>, item: &str) {
 /// Whether the shopping list shows on the HUD (an option, off by default).
 pub(super) fn plan_hud_enabled() -> bool {
     PLAN_HUD.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The world AEI's per-world records belong to: the single-player save's folder, or the
+/// server's address; None outside a connection.
+fn world_record(game: &Game<'_>) -> Option<String> {
+    let remote = game.remote.as_ref()?;
+    let key = match &remote.save_folder {
+        Some(folder) => format!("world_{folder}"),
+        None => format!("server_{}", remote.session.address),
+    };
+    // A file name: letters, digits, '-' and '_' kept, the rest '_', and a hash of the
+    // whole so two names folded alike stay apart.
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    let safe: String = key
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(48)
+        .collect();
+    Some(format!("{safe}_{:08x}", hasher.finish() as u32))
+}
+
+/// The settings key of the seen-items record for the current world.
+fn seen_key(game: &Game<'_>) -> String {
+    match world_record(game) {
+        Some(world) => format!("{SETTING_SEEN}.{world}"),
+        None => SETTING_SEEN.to_owned(),
+    }
 }

@@ -96,7 +96,8 @@ through Horizon's native mod system.
   recipes) is read out by its name and count.
 - Two more options beyond JEI, off by default: spoiler-free mode lists only items
   that have been in your inventory or that an unlocked recipe makes, and hides
-  recipes you haven't unlocked; newly found items get a gold dot until you look
+  recipes you haven't unlocked (what you have seen is kept per world, or per
+  server); newly found items get a gold dot until you look
   them up (`is:new` lists them). A third adds each item's recipe and use counts
   to its tooltip, a fourth dims the container's items a typed search leaves
   out, and a fifth folds an item's variants (enchanted books, potions) into one
