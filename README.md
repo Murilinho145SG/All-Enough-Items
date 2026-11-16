@@ -57,7 +57,8 @@ through Horizon's native mod system.
   crafting steps in order and what is left over. It picks crafting, then cooking,
   never unpacks storage blocks, avoids loops, and counts what the inventory
   already holds first (short materials are red). Escape closes it; clicking an
-  entry opens its recipes or uses. While it is open, **T** over another item
+  entry opens its recipes or uses, and Shift+clicking a step makes it with its
+  next usable recipe instead. While it is open, **T** over another item
   adds it to a shopping list whose materials are summed; click a target to
   change its count, right-click it to remove it. An option (off by default)
   adds a **Next step** button that puts the first step the inventory can craft

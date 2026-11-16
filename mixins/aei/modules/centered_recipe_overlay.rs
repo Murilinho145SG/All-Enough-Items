@@ -1309,12 +1309,15 @@ impl PlanView {
                 )]
             }),
             2 => self.plan.steps.get(index).map_or_else(Vec::new, |s| {
-                vec![format!(
-                    "\u{a7}7{} \u{d7} {} \u{2192} {}",
-                    s.crafts,
-                    s.station.trim_start_matches("minecraft:").replace('_', " "),
-                    s.stack.count
-                )]
+                vec![
+                    format!(
+                        "\u{a7}7{} \u{d7} {} \u{2192} {}",
+                        s.crafts,
+                        s.station.trim_start_matches("minecraft:").replace('_', " "),
+                        s.stack.count
+                    ),
+                    "\u{a7}8Shift+click: another recipe".to_owned(),
+                ]
             }),
             _ => vec!["\u{a7}7Left over".to_owned()],
         }
@@ -1452,6 +1455,11 @@ fn press_plan(game: &mut Game<'_>, view: &PlanView, right: bool) {
                     *state = None;
                 }
             });
+        } else if section == 2 && !right && game.has_shift_down() {
+            // Beyond the defaults: make this step with another recipe.
+            crate::game::aei_glue::cycle_plan_recipe(game, &stack.item);
+            game.audio
+                .play("minecraft:ui.button.click", None, 0.25, 1.0);
         } else {
             PLAN.with(|cell| *cell.borrow_mut() = None);
             crate::game::aei_glue::lookup(game, &stack, right);

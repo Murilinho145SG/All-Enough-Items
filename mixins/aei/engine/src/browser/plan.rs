@@ -70,11 +70,24 @@ struct Planner<'a> {
 }
 
 impl Planner<'_> {
-    /// The recipe to make `item` with, and how many it makes per craft.
+    /// The recipe to make `item` with, and how many it makes per craft: the player's
+    /// choice when it is usable here, else the first usable one.
     fn recipe(&self, item: usize) -> Option<(usize, u32)> {
+        let usable = self.usable(item);
+        if let Some(&chosen) = self.browser.plan_choices.get(&item)
+            && let Some(&(id, count)) = usable.iter().find(|(id, _)| *id == chosen)
+        {
+            return Some((id, count));
+        }
+        usable.first().copied()
+    }
+
+    /// The recipes that can make `item` here, best first, and how many each makes.
+    fn usable(&self, item: usize) -> Vec<(usize, u32)> {
         let browser = self.browser;
         let ids = browser.recipe_index.produced_by(item);
-        ids.iter()
+        let mut found: Vec<_> = ids
+            .iter()
             .copied()
             .filter_map(|id| {
                 let recipe = &browser.recipes[id];
@@ -122,8 +135,12 @@ impl Planner<'_> {
                     .sum();
                 (!loops).then_some((rank, std::cmp::Reverse(common), id, output.count.max(1)))
             })
-            .min_by_key(|(rank, common, id, _)| (*rank, *common, *id))
+            .collect();
+        found.sort_by_key(|(rank, common, id, _)| (*rank, *common, *id));
+        found
+            .into_iter()
             .map(|(_, _, id, count)| (id, count))
+            .collect()
     }
 
     fn take(map: &mut HashMap<usize, u32>, item: usize, want: u32) -> u32 {
@@ -184,6 +201,41 @@ impl Planner<'_> {
 }
 
 impl Browser {
+    /// The calculator's recipe for `item` (by id) moves on to its next usable recipe,
+    /// back to the first after the last. The position (1-based) and how many there are
+    /// come back; None when it has one recipe or none.
+    pub fn cycle_plan_recipe(&mut self, item: &str) -> Option<(usize, usize)> {
+        let &index = self.by_id.get(item)?;
+        let planner = Planner {
+            browser: self,
+            stock: HashMap::new(),
+            spare: HashMap::new(),
+            materials: Vec::new(),
+            steps: Vec::new(),
+            path: Vec::new(),
+        };
+        let usable: Vec<usize> = planner
+            .usable(index)
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        if usable.len() < 2 {
+            return None;
+        }
+        let current = self
+            .plan_choices
+            .get(&index)
+            .and_then(|chosen| usable.iter().position(|id| id == chosen))
+            .unwrap_or(0);
+        let next = (current + 1) % usable.len();
+        if next == 0 {
+            self.plan_choices.remove(&index);
+        } else {
+            self.plan_choices.insert(index, usable[next]);
+        }
+        Some((next + 1, usable.len()))
+    }
+
     /// The plan for `count` of `target`, given the stacks the player holds.
     pub fn plan(&self, target: &Stack, count: u32, inventory: &[Stack]) -> Plan {
         let mut plan = self.plan_all(&[(target.clone(), count)], inventory);
@@ -302,7 +354,7 @@ mod tests {
     }
 
     /// log(0) → planks(1) x4; planks x2 → stick(2) x4; 3 planks + 2 sticks → pickaxe(3);
-    /// raw iron(4) → ingot(5) (smelting); 9 ingots ↔ block(6).
+    /// raw iron(4) → ingot(5) (smelting); 9 ingots ↔ block(6); 9 nuggets(8) ↔ ingot.
     fn browser() -> Browser {
         let items = [
             "log",
@@ -313,6 +365,7 @@ mod tests {
             "ingot",
             "block",
             "raw_block",
+            "nugget",
         ]
         .map(item)
         .to_vec();
@@ -356,6 +409,27 @@ mod tests {
         assert_eq!(plan.steps[0].crafts, 2);
         // 8 planks made, 5 used; 4 sticks made, 2 used.
         assert_eq!(plan.leftovers, [stack("planks", 3), stack("stick", 2)]);
+    }
+
+    #[test]
+    fn a_step_s_recipe_can_be_chosen() {
+        let mut browser = browser();
+        let ingot = stack("ingot", 1);
+        let first = browser.plan(&ingot, 1, &[]);
+        assert_eq!(first.materials[0].stack.id, "minecraft:raw_iron");
+        // Ingots: smelting raw iron first, then nine nuggets.
+        assert_eq!(browser.cycle_plan_recipe("minecraft:ingot"), Some((2, 2)));
+        let second = browser.plan(&ingot, 1, &[]);
+        assert_ne!(second.materials[0].stack.id, "minecraft:raw_iron");
+        assert_eq!(
+            second.steps.last().unwrap().station,
+            "minecraft:crafting_table"
+        );
+        // Round again to the first.
+        assert_eq!(browser.cycle_plan_recipe("minecraft:ingot"), Some((1, 2)));
+        assert_eq!(browser.plan(&ingot, 1, &[]), first);
+        // Planks have one recipe.
+        assert_eq!(browser.cycle_plan_recipe("minecraft:planks"), None);
     }
 
     #[test]

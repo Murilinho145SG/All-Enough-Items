@@ -2087,3 +2087,12 @@ pub(super) fn unpin_chip(game: &mut Game<'_>, i: usize) {
     });
     save_chips(game);
 }
+
+/// Shift+click on a calculator step: its item is made with its next usable recipe.
+pub(super) fn cycle_plan_recipe(game: &mut Game<'_>, item: &str) {
+    let text = match with_browser(|browser| browser.cycle_plan_recipe(item)).flatten() {
+        Some((n, total)) => format!("Recipe {n} of {total} for this step"),
+        None => "This step has no other recipe".to_owned(),
+    };
+    game.message = Some((text, std::time::Instant::now()));
+}
