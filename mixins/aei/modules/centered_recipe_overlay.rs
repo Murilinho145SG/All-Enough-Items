@@ -2798,6 +2798,8 @@ impl Game<'_> {
             path: capture.clone(),
             size: None,
             scaled: false,
+            // Written off the render thread; the frame loop waits for the file.
+            background: true,
         });
         EXPORT.with(|cell| {
             *cell.borrow_mut() = Some(Export {

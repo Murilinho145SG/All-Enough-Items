@@ -5,7 +5,7 @@ priority = 100
 
 # Compatibility with the published native hooks used by AEI.
 [compatibility]
-horizon_revision = "fdc87aecdbd116bf1e08adcd062fcbaea8c2e2ca"
+horizon_revision = "9f42064c11efe7ef3e5ed2baad7ddc2a3b36eea0"
 
 [[crate]]
 id = "engine"
@@ -44,15 +44,12 @@ source = "modules/recipe_status.rs"
 
 [[injection]]
 id = "creative_panel"
-kind = "MODIFY_EXPRESSION_VALUE"
+kind = "HEAD"
+cancellable = true
 target = "horizon_client::game::native_panel::Game<'_>::browser_sync"
-selector = 'self.screen == Screen::Creative && of.0.native_id() != "recipes"'
-require = 1
-ordinal = 0
 helper = "hooks/creative_panel.rs"
 bindings = [
-  { name = "value", ty = "bool", value = "$value" },
-  { name = "owner", ty = "&(Owner, u64)", value = "$local_ref:of:0" },
+  { name = "game", ty = "&mut Game<'_>", value = "&mut *self" },
 ]
 
 [[injection]]
@@ -208,7 +205,7 @@ bindings = [
 id = "modal_hotkey"
 kind = "HEAD"
 cancellable = true
-target = "horizon_client::game::Game<'_>::inventory_hotkey"
+target = "horizon_client::game::inventory_input::Game<'_>::inventory_hotkey"
 helper = "hooks/modal_hotkey.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
@@ -218,7 +215,7 @@ bindings = [
 id = "modal_pick_press"
 kind = "HEAD"
 cancellable = true
-target = "horizon_client::game::Game<'_>::inventory_pick_press"
+target = "horizon_client::game::inventory_input::Game<'_>::inventory_pick_press"
 helper = "hooks/modal_pick_press.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
@@ -228,7 +225,7 @@ bindings = [
 id = "modal_pick_release"
 kind = "HEAD"
 cancellable = true
-target = "horizon_client::game::Game<'_>::inventory_pick_release"
+target = "horizon_client::game::inventory_input::Game<'_>::inventory_pick_release"
 helper = "hooks/modal_pick_release.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
@@ -238,7 +235,7 @@ bindings = [
 id = "modal_mouse_release"
 kind = "HEAD"
 cancellable = true
-target = "horizon_client::game::Game<'_>::inventory_mouse_release"
+target = "horizon_client::game::inventory_input::Game<'_>::inventory_mouse_release"
 helper = "hooks/modal_mouse_release.rs"
 bindings = [
   { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
@@ -247,22 +244,18 @@ bindings = [
 # Ctrl+O hides AEI's overlay (JEI's toggle): the panel is not synced while hidden.
 [[injection]]
 id = "hide_overlay"
-kind = "MODIFY_EXPRESSION_VALUE"
+kind = "HEAD"
+cancellable = true
 target = "horizon_client::game::native_panel::Game<'_>::browser_sync"
-selector = 'self.title.is_some()'
-require = 1
-ordinal = 0
 helper = "hooks/hide_overlay.rs"
-bindings = [
-  { name = "value", ty = "bool", value = "$value" },
-]
+bindings = []
 
 # JEI's mod name line at the end of item tooltips (an AEI setting, off by default).
 [[injection]]
 id = "mod_name_tooltip"
-kind = "MODIFY_EXPRESSION_VALUE"
+kind = "MODIFY_VARIABLE"
 target = "horizon_client::game::stations::Game<'_>::draw_stack_tooltip_with"
-selector = 'self.stack_tooltip_lines(stack, false, creative)'
+variable = { name = "lines", ordinal = 0, at = "STORE" }
 require = 1
 ordinal = 0
 helper = "hooks/mod_name_tooltip.rs"
