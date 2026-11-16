@@ -1304,6 +1304,25 @@ mod tests {
     }
 
     #[test]
+    fn previews_show_an_item_s_first_crafting_recipe() {
+        let (items, recipes) = fixture();
+        let (browser, _) = Browser::new(items, recipes);
+        let stick = Stack {
+            id: "minecraft:stick".into(),
+            count: 1,
+            components: String::new(),
+        };
+        let (card, station) = browser.preview(&stick).unwrap();
+        assert_eq!(station, "minecraft:crafting_table");
+        assert_eq!(card.outputs[0].id, "minecraft:stick");
+        let log = Stack {
+            id: "minecraft:oak_log".into(),
+            ..stick
+        };
+        assert!(browser.preview(&log).is_none());
+    }
+
+    #[test]
     fn lookup_tabs_and_back_keep_a_navigation_stack() {
         let (items, recipes) = fixture();
         let (mut browser, _) = Browser::new(items, recipes);

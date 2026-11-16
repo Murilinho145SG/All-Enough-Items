@@ -418,6 +418,52 @@ fn draw_cooking(game: &Game<'_>, batch: &mut HudBatch, card: &viewer::Card, note
     }
 }
 
+/// A recipe preview: one card left of the pointer (right of it when there is no
+/// room), drawn as the recipe window draws its cards, without animations.
+fn draw_preview(
+    game: &mut Game<'_>,
+    batch: &mut HudBatch,
+    card: &crate::game::aei::RecipeCard,
+    station: &str,
+) {
+    let category = Category::of(card.layout, station);
+    let (cw, ch) = category.size();
+    let (w, h) = (cw + 8.0, ch + 8.0);
+    let (cx, cy) = game.cursor;
+    let x = if cx - w - 8.0 >= 0.0 {
+        cx - w - 8.0
+    } else {
+        cx + 12.0
+    };
+    let y = (cy - h / 2.0).clamp(0.0, (batch.height - h).max(0.0));
+    let geometry = viewer::Card::new(category, card.width, card.height, card.inputs.len(), x, y);
+    paint::plate(game, batch, geometry.area);
+    for rect in &geometry.empty {
+        paint::slot(game, batch, *rect);
+    }
+    if geometry.arrow[2] > 0.0 {
+        paint::arrow(game, batch, geometry.arrow);
+    }
+    let native = |s: &crate::game::aei::Stack| BrowserStack {
+        item: s.id.clone(),
+        count: s.count,
+        components: s.components.clone(),
+    };
+    for (slot, rect) in &geometry.slots {
+        paint::slot(game, batch, *rect);
+        let stack = if *slot == card.inputs.len() {
+            card.outputs.first()
+        } else {
+            card.inputs
+                .get(*slot)
+                .and_then(|alternatives| alternatives.first())
+        };
+        if let Some(stack) = stack {
+            draw_stack(game, batch, &native(stack), *rect, "Preview", false);
+        }
+    }
+}
+
 /// A fuel or compostable card: the burning flame (fuel) and its two grey note lines.
 fn draw_note_card(game: &Game<'_>, batch: &mut HudBatch, card: &viewer::Card, note: &str) {
     let atlas = &game.gui.atlas;
@@ -1458,14 +1504,21 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
     {
         let line = (transfer.tooltip().to_owned(), u32::MAX);
         game.draw_tooltip_lines(batch, &[line], cursor.0, cursor.1);
-    } else if let Some(stack) =
-        hovered.and_then(|sent| super::browser_stack(world_items!(game), &sent))
-    {
+    } else if let Some((sent, stack)) = hovered.and_then(|sent| {
+        let stack = super::browser_stack(world_items!(game), &sent)?;
+        Some((sent, stack))
+    }) {
         let extra = slot_lines
             .into_iter()
             .map(|line| (horizon_client::text::Text::legacy(&line), u32::MAX))
             .collect();
         game.draw_stack_tooltip_with(batch, &stack, false, cursor.0, cursor.1, extra);
+        // Beyond JEI (an option): Shift shows the item's first recipe by the pointer.
+        if game.has_shift_down()
+            && let Some((card, station)) = crate::game::aei_glue::preview(&sent)
+        {
+            draw_preview(game, batch, &card, station);
+        }
     } else if let Some((items, _)) = &screen.items
         && viewer::contains(items.settings, cursor)
     {

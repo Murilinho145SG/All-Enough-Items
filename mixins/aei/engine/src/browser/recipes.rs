@@ -95,6 +95,27 @@ pub(crate) fn compost_note(chance: f32) -> String {
 }
 
 impl Browser {
+    /// The preview of `stack`'s first recipe (crafting first): its card and the
+    /// station whose category draws it.
+    pub fn preview(&self, stack: &Stack) -> Option<(RecipeCard, &'static str)> {
+        let &item = self.by_id.get(&stack.id)?;
+        let id = self
+            .recipe_index
+            .produced_by(item)
+            .iter()
+            .copied()
+            .filter(|&id| self.shows_category(self.recipes[id].kind))
+            .min_by_key(|&id| {
+                let crafting = matches!(
+                    self.recipes[id].kind,
+                    RecipeKind::Shaped | RecipeKind::Shapeless
+                );
+                (!crafting, id)
+            })?;
+        let recipe = &self.recipes[id];
+        Some((self.make_card(recipe, &[]), Station::of(recipe.kind).icon()))
+    }
+
     /// The id of the recipe on card `card` of the shown page.
     pub fn shown_recipe_id(&self, card: usize) -> Option<&str> {
         let recipe = &self.recipes[*self.shown_recipe_ids.get(card)?];

@@ -80,7 +80,8 @@ through Horizon's native mod system.
   to its tooltip, a fourth dims the container's items a typed search leaves
   out, and a fifth folds an item's variants (enchanted books, potions) into one
   entry marked "+": Shift+click it to unfold them, and again to fold them. A
-  dark theme darkens AEI's own windows, slots and tabs.
+  dark theme darkens AEI's own windows, slots and tabs, and another shows an
+  item's first recipe next to the pointer while Shift is held over it.
 - An optional row at the bottom left holds the nine items looked up last (off by
   default; saved per instance).
 - Beyond JEI, the last ten lookups line up above the category tabs as a
