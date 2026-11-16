@@ -63,6 +63,11 @@ through Horizon's native mod system.
   use it, its components and its tags. Click a tag to list its items. Its
   **Edit note** button lets you type a note for the item in the search field
   (Enter saves it, Escape cancels); the note shows in the details from then on.
+- Water and lava are listed after the items, as JEI lists fluids; cheat mode
+  gives their bucket. Beyond JEI, a Fluids category shows them at work: buckets
+  and bottles filled, concrete powder set, water meeting lava. (Their icons use
+  Horizon's single per-game mod image, so another native mod drawing its own
+  image would replace them.)
 - Beyond JEI, a Block Drops category lists what breaking each block can drop
   (read from its loot table), for blocks that drop something other than
   themselves.

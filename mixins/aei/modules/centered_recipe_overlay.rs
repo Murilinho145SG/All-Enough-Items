@@ -215,7 +215,10 @@ fn cycle<'a>(stacks: &'a [BrowserStack], game: &Game<'_>) -> Option<&'a BrowserS
     // Resolve before cycling so unavailable alternatives cannot create blank frames.
     let valid: Vec<_> = stacks
         .iter()
-        .filter(|stack| super::browser_stack(world_items!(game), stack).is_some())
+        .filter(|stack| {
+            crate::game::aei_glue::fluid(&stack.item).is_some()
+                || super::browser_stack(world_items!(game), stack).is_some()
+        })
         .collect();
     valid.get(seconds % valid.len().max(1)).copied()
 }
@@ -236,8 +239,12 @@ fn hovered_item(game: &Game<'_>, layout: &Layout) -> Option<(usize, BrowserStack
         let (x, y) = layout.slot(offset);
         if inside(game.cursor, [x, y, viewer::SLOT, viewer::SLOT]) {
             let index = first + offset;
-            game.panel.stacks.get(index)?.as_ref()?;
-            return Some((index, game.panel_shown()?.items.get(index)?.clone()));
+            let sent = game.panel_shown()?.items.get(index)?.clone();
+            // The game resolves items only; a fluid entry is AEI's own.
+            if crate::game::aei_glue::fluid(&sent.item).is_none() {
+                game.panel.stacks.get(index)?.as_ref()?;
+            }
+            return Some((index, sent));
         }
     }
     None
@@ -336,15 +343,26 @@ fn draw_stack(
     name: &str,
     highlight: bool,
 ) {
-    let Some(stack) = super::browser_stack(world_items!(game), sent) else {
-        return;
-    };
     let [x, y, w, h] = rect;
     let item = (
         (x + (w - 16.0) / 2.0).floor(),
         (y + (h - 16.0) / 2.0).floor(),
     );
-    game.draw_item(batch, &stack, item.0, item.1);
+    let fluid = crate::game::aei_glue::fluid(&sent.item);
+    if let Some(i) = fluid {
+        // A fluid: its still texture, from AEI's own HUD image.
+        game.native_sprite(
+            batch,
+            horizon_client::hud::MOD_IMAGE_SPRITE,
+            crate::game::aei_glue::fluid_sprite(i),
+            [item.0, item.1, 16.0, 16.0],
+        );
+    } else {
+        let Some(stack) = super::browser_stack(world_items!(game), sent) else {
+            return;
+        };
+        game.draw_item(batch, &stack, item.0, item.1);
+    }
     if highlight && viewer::contains(rect, game.cursor) {
         paint::highlight(game, batch, item);
     }
@@ -354,7 +372,10 @@ fn draw_stack(
     horizon_client::widgets::record(&label, rect, true);
     // The narrator reads the item's name (and count), as it reads buttons.
     horizon_client::widgets::narratable(|| {
-        let mut title = game.pack.names.display_item(&sent.item).to_string();
+        let mut title = match fluid {
+            Some(i) => crate::game::aei_glue::fluid_name(game, i),
+            None => game.pack.names.display_item(&sent.item).to_string(),
+        };
         if sent.count > 1 {
             title.push_str(&format!(", {}", sent.count));
         }
@@ -383,6 +404,7 @@ fn category_title(game: &Game<'_>, station: &str) -> String {
         "minecraft:anvil" => "Anvil".into(),
         "minecraft:emerald" => "Trading".into(),
         "minecraft:iron_pickaxe" => "Block Drops".into(),
+        "minecraft:bucket" => "Fluids".into(),
         _ => "Brewing".into(),
     }
 }
@@ -1579,6 +1601,24 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
     {
         let line = (transfer.tooltip().to_owned(), u32::MAX);
         game.draw_tooltip_lines(batch, &[line], cursor.0, cursor.1);
+    } else if let Some(i) = hovered
+        .as_ref()
+        .and_then(|sent| crate::game::aei_glue::fluid(&sent.item))
+    {
+        // A fluid's tooltip: its name, then what it is.
+        let mut lines = vec![
+            (
+                horizon_client::text::Text::legacy(&crate::game::aei_glue::fluid_name(game, i)),
+                u32::MAX,
+            ),
+            (horizon_client::text::Text::legacy("\u{a7}7Fluid"), u32::MAX),
+        ];
+        lines.extend(
+            slot_lines
+                .into_iter()
+                .map(|line| (horizon_client::text::Text::legacy(&line), u32::MAX)),
+        );
+        game.draw_tooltip_lines(batch, &lines, cursor.0, cursor.1);
     } else if let Some((sent, stack)) = hovered.and_then(|sent| {
         let stack = super::browser_stack(world_items!(game), &sent)?;
         Some((sent, stack))

@@ -268,6 +268,7 @@ impl Browser {
             RecipeKind::Anvil => (Layout::Smithing, 2, 1, anvil_note(recipe.ticks)),
             RecipeKind::Trade => (Layout::Smithing, 2, 1, String::new()),
             RecipeKind::Drop => (Layout::Single, 1, 1, String::new()),
+            RecipeKind::Fluid => (Layout::Smithing, 2, 1, String::new()),
             RecipeKind::Brewing => (Layout::Brewing, 2, 1, String::new()),
         };
         let place_enabled = (recipe.book_id >= 0).then(|| known.contains(&recipe.book_id));

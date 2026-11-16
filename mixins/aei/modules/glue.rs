@@ -195,6 +195,37 @@ fn catalogue(game: &Game<'_>) -> Vec<model::Entry> {
                 },
             }
         })
+        // JEI lists the fluids after the items.
+        .chain(FLUIDS.iter().enumerate().map(|(i, (id, _, _))| {
+            let name = fluid_name(game, i);
+            let english = game
+                .pack
+                .names
+                .get(FLUIDS[i].1)
+                .map(str::to_owned)
+                .unwrap_or_default();
+            model::Entry {
+                stack: model::Stack {
+                    id: (*id).to_owned(),
+                    count: 1,
+                    components: String::new(),
+                },
+                aliases: if english.is_empty() || english.to_lowercase() == name.to_lowercase() {
+                    Vec::new()
+                } else {
+                    vec![english]
+                },
+                name,
+                tooltip: vec!["Fluid".to_owned()],
+                tabs: Vec::new(),
+                props: model::EntryProps {
+                    max_stack: 1,
+                    rarity: "common".to_owned(),
+                    block: true,
+                    ..Default::default()
+                },
+            }
+        }))
         .collect()
 }
 
@@ -341,6 +372,172 @@ fn anvil_recipes(game: &Game<'_>, items: &[NativeItem]) -> Vec<model::Recipe> {
                 let item = ItemStack::new(native.id.as_str(), 1);
                 combine(&item, std::slice::from_ref(book));
             }
+        }
+    }
+    recipes
+}
+
+/// The fluids AEI lists after the items, as JEI does: their id, their name's language
+/// key and the bucket that holds them. Their icons are the first frame of the still
+/// textures, uploaded as AEI's own HUD image (`native_mod_image`), side by side.
+const FLUIDS: [(&str, &str, &str); 2] = [
+    (
+        "minecraft:water",
+        "block.minecraft.water",
+        "minecraft:water_bucket",
+    ),
+    (
+        "minecraft:lava",
+        "block.minecraft.lava",
+        "minecraft:lava_bucket",
+    ),
+];
+
+/// Which of [`FLUIDS`] `id` is.
+pub(super) fn fluid(id: &str) -> Option<usize> {
+    FLUIDS.iter().position(|(fluid, _, _)| *fluid == id)
+}
+
+/// A fluid's name in the game's language.
+pub(super) fn fluid_name(game: &Game<'_>, i: usize) -> String {
+    game.pack
+        .names
+        .display_get(FLUIDS[i].1)
+        .unwrap_or_else(|| FLUIDS[i].0.trim_start_matches("minecraft:").to_owned())
+}
+
+/// Where fluid `i`'s icon sits in AEI's HUD image (`[x, y, w, h]` in its pixels).
+pub(super) fn fluid_sprite(i: usize) -> [f32; 4] {
+    [i as f32 * 16.0, 0.0, 16.0, 16.0]
+}
+
+/// Uploads the fluids' icons: each still texture's first frame scaled to 16x16, water
+/// tinted with its plain colour (0x3f76e4) as the game tints it.
+fn upload_fluid_sprites(game: &mut Game<'_>) {
+    let Some(root) = resource_root() else {
+        return;
+    };
+    let width = 16 * FLUIDS.len();
+    let mut image = vec![0u8; width * 16 * 4];
+    for (i, (texture, tint)) in [
+        ("water_still", [0x3f, 0x76, 0xe4]),
+        ("lava_still", [255; 3]),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let path = root
+            .join("assets/minecraft/textures/block")
+            .join(format!("{texture}.png"));
+        let Ok((w, h, rgba)) = horizon_client::hud::decode(&path) else {
+            continue;
+        };
+        // An animation's frames stack downwards, each as wide as the texture.
+        let side = w.min(h) as usize;
+        if side == 0 {
+            continue;
+        }
+        for y in 0..16 {
+            for x in 0..16 {
+                let from = ((y * side / 16) * w as usize + x * side / 16) * 4;
+                let to = (y * width + i * 16 + x) * 4;
+                for c in 0..3 {
+                    image[to + c] = (u32::from(rgba[from + c]) * tint[c] / 255) as u8;
+                }
+                image[to + 3] = rgba[from + 3];
+            }
+        }
+    }
+    game.native_mod_image(width as u32, 16, &image);
+}
+
+/// Beyond JEI: the fluids at work in the world, two inputs to one output: a bucket or
+/// a glass bottle filled, concrete powder set in water, water meeting lava.
+fn fluid_recipes(game: &Game<'_>, items: &[NativeItem]) -> Vec<model::Recipe> {
+    let index: std::collections::HashMap<&str, usize> = items
+        .iter()
+        .enumerate()
+        .map(|(i, item)| (item.id.as_str(), i))
+        .collect();
+    // The fluids come after the items.
+    let (water, lava) = (items.len(), items.len() + 1);
+    let one = |item: usize, components: String| model::Ingredient {
+        item,
+        count: 1,
+        components,
+    };
+    let mut recipes = Vec::new();
+    let mut add =
+        |id: String, first: model::Ingredient, second: usize, output: model::Ingredient| {
+            recipes.push(model::Recipe {
+                id: format!("aei:fluid/{id}"),
+                kind: model::RecipeKind::Fluid,
+                width: 2,
+                height: 1,
+                inputs: vec![vec![first], vec![one(second, String::new())]],
+                outputs: vec![output],
+                ticks: 0,
+                experience: 0.0,
+                book_id: -1,
+            });
+        };
+    let item = |id: &str| index.get(id).copied();
+    if let Some(bucket) = item("minecraft:bucket") {
+        for (fluid, (_, _, filled)) in [water, lava].into_iter().zip(FLUIDS) {
+            if let Some(filled) = item(filled) {
+                let name = filled.to_owned();
+                add(
+                    items[name].id.trim_start_matches("minecraft:").to_owned(),
+                    one(bucket, String::new()),
+                    fluid,
+                    one(name, String::new()),
+                );
+            }
+        }
+    }
+    // The water bottle, as the creative tabs list it.
+    if let (Some(bottle), Some(potion)) = (item("minecraft:glass_bottle"), item("minecraft:potion"))
+        && let Some(components) = game
+            .creative_screen
+            .search_items()
+            .iter()
+            .filter(|stack| &*stack.item == "minecraft:potion")
+            .map(super::native_recipes::components)
+            .find(|c| c.contains("\"minecraft:water\""))
+    {
+        add(
+            "water_bottle".to_owned(),
+            one(bottle, String::new()),
+            water,
+            one(potion, components),
+        );
+    }
+    for (i, native) in items.iter().enumerate() {
+        if let Some(color) = native.id.strip_suffix("_concrete_powder")
+            && let Some(concrete) = item(&format!("{color}_concrete"))
+        {
+            let name = items[concrete]
+                .id
+                .trim_start_matches("minecraft:")
+                .to_owned();
+            add(
+                name,
+                one(i, String::new()),
+                water,
+                one(concrete, String::new()),
+            );
+        }
+    }
+    // Lava meeting water: a source turns to obsidian, flowing lava to cobblestone, lava
+    // flowing onto water to stone.
+    for made in ["obsidian", "cobblestone", "stone"] {
+        if let Some(output) = item(&format!("minecraft:{made}")) {
+            add(
+                made.to_owned(),
+                one(lava, String::new()),
+                water,
+                one(output, String::new()),
+            );
         }
     }
     recipes
@@ -651,8 +848,20 @@ pub(super) fn frame(game: &mut Game<'_>) {
             recipes.extend(fuels_and_compostables(game, &tables.items));
             recipes.extend(anvil_recipes(game, &tables.items));
             recipes.extend(block_drops(game, &tables.items));
-            let (mut browser, _) =
-                model::Browser::new(tables.items.iter().map(item).collect(), recipes);
+            recipes.extend(fluid_recipes(game, &tables.items));
+            let mut items: Vec<model::ItemInfo> = tables.items.iter().map(item).collect();
+            items.extend(
+                FLUIDS
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (id, _, _))| model::ItemInfo {
+                        id: (*id).to_owned(),
+                        name: fluid_name(game, i),
+                        tags: Vec::new(),
+                    }),
+            );
+            upload_fluid_sprites(game);
+            let (mut browser, _) = model::Browser::new(items, recipes);
             browser.handle(model::Event::SetSearchModes(search_modes(game)), false, &[]);
             browser.handle(model::Event::SetSort(sort_order(game)), false, &[]);
             browser.handle(
@@ -1042,6 +1251,15 @@ pub(super) fn toggle_cheat(game: &mut Game<'_>) {
 /// else into the inventory. Anyone else sends `/give`, which the server allows only to
 /// players with that permission.
 fn give(game: &mut Game<'_>, stack: &model::Stack, count: u32) {
+    // A fluid comes in its bucket.
+    if let Some(i) = fluid(&stack.id) {
+        let bucket = model::Stack {
+            id: FLUIDS[i].2.to_owned(),
+            count: 1,
+            components: String::new(),
+        };
+        return give(game, &bucket, count);
+    }
     let Some(max) = game.items().get(&stack.id).map(|item| item.max_stack) else {
         return;
     };
