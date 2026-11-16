@@ -171,10 +171,10 @@ with catalysts, transfers, cycling ingredients and category order; and the
 crafting, cooking, campfire, stonecutting, smithing, brewing, anvil, fuel and
 compostable categories. The pinned native contract provides the first six; AEI
 adds fuel and compostable from the items' own `fuel` and `compostable`
-components, and the anvil from the anvil's own rules. What remains different is
-listed in `docs/roadmap-jei.md`: fluids (water and lava) aren't listed, since
-the GUI atlas has no fluid sprites and no vanilla recipe uses them, and furnace
-transfers follow a Horizon issue at the pinned revision (see `docs/design.md`).
+components, and the anvil from the anvil's own rules. Water and lava
+are listed as fluids too (their icons are uploaded as AEI's own HUD image). What
+remains different is listed in `docs/roadmap-jei.md`: furnace transfers follow a
+Horizon issue at the pinned revision (see `docs/design.md`).
 
 AEI extends Horizon's creative inventory panel guard for its own recipe viewer
 and leaves the vanilla recipe book panel available. The viewer works from any

@@ -126,7 +126,11 @@ worked around:
 - At the pinned Horizon revision, placing a furnace-family recipe in singleplayer
   (through the vanilla book or AEI's "+") takes the input from the inventory but
   the furnace never shows it, and closing returns it. AEI uses the same book
-  call, so it follows whatever Horizon's book does.
+  call, so it follows whatever Horizon's book does. Moving the items with plain
+  slot clicks is no way around it: on 2026-11-16 the singleplayer furnace screen
+  also lost a right-clicked item and showed the client more raw iron than the
+  server held (8 + 7 against the server's 8), so the furnace menu's sync itself is
+  what needs fixing, in Horizon.
 
 ## Verification
 
