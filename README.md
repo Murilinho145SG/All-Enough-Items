@@ -34,7 +34,9 @@ through Horizon's native mod system.
   italics as JEI does (off by default, since it changes vanilla tooltips).
 - Hover an item and press **R** for recipes or **U** for uses (also over
   inventory slots and the vanilla recipe book's buttons). Beyond JEI, R and U
-  aimed at a block in the world open the inventory on that block's item. In the catalogue,
+  aimed at a block or an entity in the world open the inventory on its item (an
+  entity's pick-block item: a mob's spawn egg, whose uses are its drops, a boat,
+  a minecart). In the catalogue,
   left-click shows recipes and right-click shows uses.
 - Browse recipes in a JEI-style window: category tabs above it, the crafting
   station on the left, category and page arrows, recipes on bordered plates with

@@ -1859,10 +1859,16 @@ pub(super) fn world_key(game: &mut Game<'_>, key: &str) {
         k if k == uses => true,
         _ => return,
     };
-    let Some(hit) = game.pick() else {
-        return;
+    // An entity before any block gives its pick-block item (a mob's spawn egg, a boat,
+    // a minecart, an item frame's item); else the block aimed at gives its own.
+    let item = match game.pick_entity_hit() {
+        Some(Some(id)) => game.entity_pick_result(id),
+        Some(None) => None,
+        None => game
+            .pick()
+            .and_then(|hit| game.picked_stack(hit.pos, false)),
     };
-    let Some(item) = game.picked_stack(hit.pos, false) else {
+    let Some(item) = item else {
         return;
     };
     let target = model::Stack {
