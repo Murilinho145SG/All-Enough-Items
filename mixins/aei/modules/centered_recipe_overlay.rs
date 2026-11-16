@@ -1520,7 +1520,20 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
             // Beyond JEI: how much of the category's recipe book the player unlocked.
             Some(match crate::game::aei_glue::progress(station) {
                 Some((unlocked, total)) => {
-                    format!("{title}\n\u{a7}7Unlocked: {unlocked}/{total}")
+                    let mut text = format!("{title}\n\u{a7}7Unlocked: {unlocked}/{total}");
+                    // What is still locked: the first few, then how many more
+                    // (`is:locked` lists them all).
+                    let missing = crate::game::aei_glue::missing(station);
+                    for name in missing.iter().take(8) {
+                        text.push_str(&format!("\n\u{a7}8- {name}"));
+                    }
+                    if missing.len() > 8 {
+                        text.push_str(&format!(
+                            "\n\u{a7}8... and {} more (search is:locked)",
+                            missing.len() - 8
+                        ));
+                    }
+                    text
                 }
                 None => title,
             })

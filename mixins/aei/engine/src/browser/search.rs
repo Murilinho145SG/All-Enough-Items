@@ -72,6 +72,8 @@ pub(super) struct Indexed {
     pub(super) craftable: bool,
     /// Craftable after one intermediate craft (`is:craftable2`).
     pub(super) craftable2: bool,
+    /// A recipe-book recipe makes it that the player hasn't unlocked (`is:locked`).
+    pub(super) locked: bool,
     /// Found this session and not looked at yet.
     pub(super) fresh: bool,
 }
@@ -158,6 +160,7 @@ impl Indexed {
             item: None,
             craftable: false,
             craftable2: false,
+            locked: false,
             fresh: false,
         }
     }
@@ -201,6 +204,7 @@ impl Indexed {
                 "stackable" => p.max_stack > 1,
                 "craftable" => self.craftable,
                 "craftable2" => self.craftable2,
+                "locked" => self.locked,
                 "new" => self.fresh,
                 _ => false,
             },
@@ -267,6 +271,14 @@ impl SearchQuery {
             .iter()
             .flatten()
             .any(|term| matches!(&term.filter, Some(Filter::Is(what)) if what == "craftable" || what == "craftable2"))
+    }
+
+    /// Whether the query reads `is:locked`, which changes as recipes unlock.
+    pub(super) fn reads_known(&self) -> bool {
+        self.groups
+            .iter()
+            .flatten()
+            .any(|term| matches!(&term.filter, Some(Filter::Is(what)) if what == "locked"))
     }
 
     pub(super) fn parse(query: &str, modes: &SearchModes) -> Self {

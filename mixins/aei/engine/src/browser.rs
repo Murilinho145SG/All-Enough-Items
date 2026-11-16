@@ -124,6 +124,7 @@ impl Browser {
     /// are left out.
     pub fn set_catalogue(&mut self, entries: Vec<Entry>) -> Update {
         self.set_entries(entries);
+        self.refresh_locked();
         self.item_list()
     }
 
@@ -1297,6 +1298,24 @@ mod tests {
         );
         assert_eq!(browser.progress("minecraft:stonecutter", &[8]), None);
         assert_eq!(browser.progress("test:none", &[]), None);
+        let missing = browser.missing("minecraft:crafting_table", &[8]);
+        assert_eq!(missing.len(), 1);
+        let mut browser = browser;
+        browser.handle(Event::SetKnown(vec![8]), false, &[]);
+        let updates = browser.handle(Event::Search("is:locked".into()), false, &[]);
+        let Some(Update::ItemList(list)) = updates.first() else {
+            panic!("expected the item list");
+        };
+        let names: Vec<_> = list
+            .iter()
+            .map(|s| browser.items[browser.by_id[&s.id]].name.clone())
+            .collect();
+        assert_eq!(names, missing);
+        // Unlocking every book recipe empties both.
+        let all: Vec<i32> = browser.recipes.iter().map(|r| r.book_id).collect();
+        let updates = browser.handle(Event::SetKnown(all.clone()), false, &[]);
+        assert!(matches!(updates.first(), Some(Update::ItemList(list)) if list.is_empty()));
+        assert!(browser.missing("minecraft:crafting_table", &all).is_empty());
     }
 
     #[test]

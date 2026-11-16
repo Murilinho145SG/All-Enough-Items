@@ -1805,6 +1805,17 @@ pub(super) fn progress(station: &str) -> Option<(usize, usize)> {
     })
 }
 
+/// The names of what `station`'s locked recipe-book recipes make.
+pub(super) fn missing(station: &str) -> Vec<String> {
+    BROWSER.with(|cell| {
+        let session = cell.borrow();
+        session
+            .as_ref()
+            .map(|session| session.browser.missing(station, &session.known))
+            .unwrap_or_default()
+    })
+}
+
 /// Whether list entry `index` gets the "newly found" mark (an option).
 pub(super) fn shown_fresh(index: usize) -> bool {
     MARK_NEW.load(std::sync::atomic::Ordering::Relaxed)

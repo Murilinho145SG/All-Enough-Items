@@ -72,6 +72,10 @@ impl Browser {
             return Vec::new();
         }
         self.known = known;
+        self.refresh_locked();
+        if self.search.reads_known() {
+            return vec![self.item_list()];
+        }
         if self.spoiler_free {
             vec![self.item_list()]
         } else {

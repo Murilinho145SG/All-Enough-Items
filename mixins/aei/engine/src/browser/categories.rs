@@ -81,6 +81,43 @@ impl Browser {
         Some((unlocked, book.len()))
     }
 
+    /// What the player's recipe book still lacks in `station`'s category: the names of
+    /// the items its locked recipes make, sorted, without repeats.
+    pub fn missing(&self, station: &str, known: &[i32]) -> Vec<String> {
+        let Some(station) = Station::ALL.into_iter().find(|s| s.icon() == station) else {
+            return Vec::new();
+        };
+        let mut names: Vec<String> = self
+            .recipes
+            .iter()
+            .filter(|r| Station::of(r.kind) == station && r.book_id >= 0)
+            .filter(|r| !known.contains(&r.book_id))
+            .filter_map(|r| r.outputs.first())
+            .filter_map(|o| self.items.get(o.item))
+            .map(|item| item.name.clone())
+            .collect();
+        names.sort();
+        names.dedup();
+        names
+    }
+
+    /// Marks the entries a locked recipe-book recipe makes (`is:locked`).
+    pub(super) fn refresh_locked(&mut self) {
+        let mut locked = vec![false; self.items.len()];
+        for recipe in &self.recipes {
+            if recipe.book_id >= 0 && !self.known.contains(&recipe.book_id) {
+                for output in &recipe.outputs {
+                    if let Some(l) = locked.get_mut(output.item) {
+                        *l = true;
+                    }
+                }
+            }
+        }
+        for entry in &mut self.indexed {
+            entry.locked = entry.item.is_some_and(|i| locked[i]);
+        }
+    }
+
     pub(super) fn shows_category(&self, kind: RecipeKind) -> bool {
         self.categories.contains(&Station::of(kind))
     }
