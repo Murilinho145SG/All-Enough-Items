@@ -1320,6 +1320,9 @@ mod tests {
             ..stick
         };
         assert!(browser.preview(&log).is_none());
+        let id = browser.recipes[0].id.clone();
+        assert_eq!(browser.card_by_id(&id).unwrap().2, id);
+        assert!(browser.card_by_id("test:missing").is_none());
     }
 
     #[test]

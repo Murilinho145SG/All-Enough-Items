@@ -107,6 +107,16 @@ impl Browser {
         ))
     }
 
+    /// The recipe `id` as a card to pin: its card, station and id (pins are saved by id).
+    pub fn card_by_id(&self, id: &str) -> Option<(RecipeCard, &'static str, String)> {
+        let recipe = self.recipes.iter().find(|recipe| recipe.id == id)?;
+        Some((
+            self.make_card(recipe, &[]),
+            Station::of(recipe.kind).icon(),
+            recipe.id.clone(),
+        ))
+    }
+
     /// The preview of `stack`'s first recipe (crafting first): its card and the
     /// station whose category draws it.
     pub fn preview(&self, stack: &Stack) -> Option<(RecipeCard, &'static str)> {

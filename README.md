@@ -95,8 +95,8 @@ through Horizon's native mod system.
 - Beyond JEI, the last ten lookups line up above the category tabs as a
   breadcrumb trail (the shown one framed in gold): click one to go back to it.
 - Beyond JEI, **P** over a recipe card pins it at the bottom left of the screen
-  (two at most) so it stays in view while you browse; P over a pinned one
-  unpins it.
+  (two at most) so it stays in view while you browse, and in later sessions;
+  P over a pinned one unpins it.
 - Ingredients with alternatives cycle every second; hold **Shift** to pause them.
   A slot whose alternatives are exactly a tag says so in its tooltip ("Accepts
   any: #minecraft:planks"), and with advanced tooltips (F3+H) an output shows its

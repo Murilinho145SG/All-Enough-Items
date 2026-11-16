@@ -930,6 +930,14 @@ pub(super) fn frame(game: &mut Game<'_>) {
                         .collect();
                 });
             }
+            // The pinned recipes, by id, as the player left them.
+            let pinned: Vec<_> = game
+                .native_setting(model::ID, SETTING_PINNED)
+                .unwrap_or_default()
+                .lines()
+                .filter_map(|id| browser.card_by_id(id.trim()))
+                .collect();
+            game.aei_set_pinned(pinned);
             let initial = browser.set_catalogue(catalogue(game));
             *session = Some(Session {
                 tables,
@@ -1194,6 +1202,7 @@ const SETTING_HIGHLIGHT: &str = "highlight_inventory";
 const SETTING_GROUPS: &str = "group_variants";
 const SETTING_DARK: &str = "dark_theme";
 const SETTING_NOTES: &str = "notes";
+const SETTING_PINNED: &str = "pinned_recipes";
 const SETTING_PREVIEW: &str = "shift_preview";
 const SETTING_TRADES: &str = "trades";
 const SETTING_RECENT_ITEMS: &str = "recent_items";
@@ -1757,4 +1766,9 @@ pub(super) fn preview(target: &NativeStack) -> Option<(model::RecipeCard, &'stat
 /// Card `card` of the shown page, to pin: its card, station and recipe id.
 pub(super) fn shown_card(card: usize) -> Option<(model::RecipeCard, &'static str, String)> {
     with_browser(|browser| browser.shown_card(card)).flatten()
+}
+
+/// Saves the pinned recipes' ids, one per line.
+pub(super) fn save_pinned(game: &mut Game<'_>, ids: &[String]) {
+    game.native_set_setting(model::ID, SETTING_PINNED, &ids.join("\n"));
 }

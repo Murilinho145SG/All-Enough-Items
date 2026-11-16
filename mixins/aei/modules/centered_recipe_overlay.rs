@@ -492,6 +492,7 @@ fn toggle_pin(game: &mut Game<'_>, batch: &HudBatch) -> bool {
         .position(|rect| viewer::contains(*rect, cursor))
     {
         PINNED.with(|cell| cell.borrow_mut().remove(i));
+        save_pinned(game);
         return true;
     }
     let Some(card) = game.aei_hovered_card() else {
@@ -510,7 +511,15 @@ fn toggle_pin(game: &mut Game<'_>, batch: &HudBatch) -> bool {
             }
         }
     });
+    save_pinned(game);
     true
+}
+
+/// Saves the pinned recipes, so they come back in the next session.
+fn save_pinned(game: &mut Game<'_>) {
+    let ids: Vec<String> =
+        PINNED.with(|cell| cell.borrow().iter().map(|(_, _, id)| id.clone()).collect());
+    crate::game::aei_glue::save_pinned(game, &ids);
 }
 
 fn draw_pinned(game: &mut Game<'_>, batch: &mut HudBatch) {
@@ -2251,6 +2260,14 @@ impl Game<'_> {
         crate::game::aei_glue::save_note(self, &item, &text);
         self.aei_set_search(&query);
         true
+    }
+
+    /// The pinned recipes a session starts with (saved by id).
+    pub(in crate::game) fn aei_set_pinned(
+        &mut self,
+        pinned: Vec<(crate::game::aei::RecipeCard, &'static str, String)>,
+    ) {
+        PINNED.with(|cell| *cell.borrow_mut() = pinned);
     }
 
     /// P over a recipe card pins it beside the screen (P over a pinned one unpins it).
