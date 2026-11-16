@@ -1,6 +1,6 @@
 [mod]
 id = "aei"
-version = "0.1.7"
+version = "1.0.0"
 priority = 100
 
 # Compatibility with the published native hooks used by AEI.
