@@ -151,7 +151,8 @@ through Horizon's native mod system.
   the recipe view then closes. The button only shows on recipes the open screen's
   book takes: crafting recipes that fit the open grid (2x2 in the inventory, 3x3
   at a crafting table), and smelting, blasting or smoking recipes at their
-  furnace. It is orange
+  furnace, where **+** puts one ingredient in the input and **Shift-click**
+  Shift-clicks every stack of it in, with ordinary container clicks. It is orange
   when ingredients are missing (the grid shows the recipe as a ghost) and dark
   when the recipe isn't unlocked in the player's recipe book.
 
@@ -172,9 +173,8 @@ crafting, cooking, campfire, stonecutting, smithing, brewing, anvil, fuel and
 compostable categories. The pinned native contract provides the first six; AEI
 adds fuel and compostable from the items' own `fuel` and `compostable`
 components, and the anvil from the anvil's own rules. Water and lava
-are listed as fluids too (their icons are uploaded as AEI's own HUD image). What
-remains different is listed in `docs/roadmap-jei.md`: furnace transfers follow a
-Horizon issue at the pinned revision (see `docs/design.md`).
+are listed as fluids too (their icons are uploaded as AEI's own HUD image). The
+roadmap in `docs/roadmap-jei.md` tracks each JEI feature.
 
 AEI extends Horizon's creative inventory panel guard for its own recipe viewer
 and leaves the vanilla recipe book panel available. The viewer works from any

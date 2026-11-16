@@ -2195,3 +2195,8 @@ pub(super) fn clear_fresh(game: &mut Game<'_>) {
 pub(super) fn recipe_speech(card: usize) -> Option<String> {
     with_browser(|browser| browser.recipe_speech(card)).flatten()
 }
+
+/// The input slots (alternatives by item id) of the recipe with recipe-book id `book_id`.
+pub(super) fn book_inputs(book_id: i32) -> Option<Vec<Vec<String>>> {
+    with_browser(|browser| browser.book_inputs(book_id)).flatten()
+}

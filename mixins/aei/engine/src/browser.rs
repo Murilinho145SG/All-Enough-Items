@@ -1452,6 +1452,10 @@ mod tests {
         let id = browser.recipes[0].id.clone();
         assert_eq!(browser.card_by_id(&id).unwrap().2, id);
         assert!(browser.card_by_id("test:missing").is_none());
+        let book = browser.recipes.iter().find(|r| r.book_id >= 0).unwrap();
+        let (book_id, slots) = (book.book_id, book.inputs.len());
+        assert_eq!(browser.book_inputs(book_id).unwrap().len(), slots);
+        assert!(browser.book_inputs(-1).is_none());
     }
 
     #[test]

@@ -75,7 +75,59 @@ impl Game<'_> {
             return Err("the open screen can't take that recipe".into());
         };
         self.recipe_ui.ghost.clear();
+        // A furnace, blast furnace or smoker on a server's menu (a single-player world's
+        // too): the ingredients go in with ordinary container clicks, which the server
+        // takes as the player's own. Horizon's book placement leaves that menu as it was.
+        if self.remote_menu_id() != 0 {
+            return self.aei_fill_furnace(display_id, all);
+        }
         self.place_recipe(book_type, index, all);
         Ok(())
+    }
+
+    /// Puts the ingredient of furnace-family recipe `display_id` in the open furnace's
+    /// input with container clicks: one item (picked up, one placed with a right click,
+    /// the rest put back), or with `all` every stack of it Shift-clicked in, as the
+    /// player would.
+    fn aei_fill_furnace(&mut self, display_id: i32, all: bool) -> Result<(), String> {
+        use horizon_client::menu::Input;
+        // The furnace's input slot, as the game numbers the open container's slots.
+        const INPUT: usize = 300;
+        let Some(accepts) = crate::game::aei_glue::book_inputs(display_id)
+            .and_then(|slots| slots.into_iter().find(|s| !s.is_empty()))
+        else {
+            return Err("the recipe has no input".into());
+        };
+        if self.carried.is_some() {
+            return Err("an item is held on the cursor".into());
+        }
+        let takes = |id: &str| accepts.iter().any(|a| a == id);
+        if let Some(input) = self.slot_view(INPUT)
+            && !takes(&input.item)
+        {
+            return Err("the furnace already holds another item".into());
+        }
+        let held: Vec<usize> = (0..36)
+            .filter(|&slot| self.slot_view(slot).is_some_and(|s| takes(&s.item)))
+            .collect();
+        let Some(&first) = held.first() else {
+            return Err("the inventory has none of the ingredient".into());
+        };
+        let ops: Vec<(Option<usize>, i32, Input)> = if all {
+            held.iter()
+                .map(|&slot| (Some(slot), 0, Input::QuickMove))
+                .collect()
+        } else {
+            vec![
+                (Some(first), 0, Input::Pickup),
+                (Some(INPUT), 1, Input::Pickup),
+                (Some(first), 0, Input::Pickup),
+            ]
+        };
+        if self.remote_menu_ops(&ops) {
+            Ok(())
+        } else {
+            Err("the furnace's slots aren't open".into())
+        }
     }
 }

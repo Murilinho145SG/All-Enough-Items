@@ -117,6 +117,22 @@ impl Browser {
         ))
     }
 
+    /// The input slots (each slot's alternatives, by item id) of the recipe with
+    /// recipe-book id `book_id`.
+    pub fn book_inputs(&self, book_id: i32) -> Option<Vec<Vec<String>>> {
+        let recipe = self
+            .recipes
+            .iter()
+            .find(|r| r.book_id == book_id && book_id >= 0)?;
+        Some(
+            recipe
+                .inputs
+                .iter()
+                .map(|slot| slot.iter().map(|i| self.item_id(i).to_owned()).collect())
+                .collect(),
+        )
+    }
+
     /// The preview of `stack`'s first recipe (crafting first): its card and the
     /// station whose category draws it.
     pub fn preview(&self, stack: &Stack) -> Option<(RecipeCard, &'static str)> {

@@ -123,14 +123,13 @@ worked around:
   whole number of pages; page turns past a window's end ask for the next one, and
   the page label counts across windows.
 - Third-party panels in the creative inventory are not supported.
-- At the pinned Horizon revision, placing a furnace-family recipe in singleplayer
-  (through the vanilla book or AEI's "+") takes the input from the inventory but
-  the furnace never shows it, and closing returns it. AEI uses the same book
-  call, so it follows whatever Horizon's book does. Moving the items with plain
-  slot clicks is no way around it: on 2026-11-16 the singleplayer furnace screen
-  also lost a right-clicked item and showed the client more raw iron than the
-  server held (8 + 7 against the server's 8), so the furnace menu's sync itself is
-  what needs fixing, in Horizon.
+- Furnace-family transfers don't use Horizon's book placement: at the pinned
+  revision its `PlaceRecipe` reaches the server with the furnace's menu, the recipe
+  known and placeable, and still leaves the furnace as it was. AEI's **+** fills
+  the input with ordinary container clicks instead (pick up, one right click, put
+  back; Shift-clicks for the most), which the server takes as the player's own
+  (`recipe_status.rs`, `aei_fill_furnace`). The crafting grid still goes through
+  the book.
 
 ## Verification
 
