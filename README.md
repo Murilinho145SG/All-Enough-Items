@@ -1,3 +1,5 @@
+<img src="docs/images/icon.png" alt="" width="96" align="right">
+
 # All Enough Items
 
 All Enough Items (AEI) is a client-side item and recipe browser for
