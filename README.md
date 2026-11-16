@@ -104,7 +104,7 @@ through Horizon's native mod system.
   dot until you look them up: a "New (N)" chip lists them (`is:new`), and
   right-clicking it marks them all as seen. A third adds each item's recipe and use counts
   to its tooltip, a fourth dims the container's items a typed search leaves
-  out, and a fifth folds an item's variants (enchanted books, potions) into one
+  out (on the creative screen, the player's own slots), and a fifth folds an item's variants (enchanted books, potions) into one
   entry marked "+": Shift+click it to unfold them, and again to fold them. A
   dark theme darkens AEI's own windows, slots and tabs (a high-contrast one
   draws them black with white edges and text, and a compact list uses 16-px

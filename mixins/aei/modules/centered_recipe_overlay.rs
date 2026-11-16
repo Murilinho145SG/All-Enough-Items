@@ -1610,6 +1610,34 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
             }
         }
     }
+    // On the creative screen: the player's slots (the inventory tab's, else the hotbar
+    // row under the item tabs); the tabs' own items are a catalogue, left as they are.
+    if screen.view.is_none() && game.screen == crate::game::Screen::Creative {
+        use horizon_client::creative::Creative;
+        let (ox, oy) = Game::creative_origin(batch);
+        let slots: Vec<(usize, (f32, f32))> = if game.creative_inventory_open() {
+            Creative::inventory_slots()
+                .filter_map(|slot| Some((slot, Creative::inventory_slot_position(slot)?)))
+                .collect()
+        } else {
+            (0..9)
+                .filter_map(|slot| Some((slot, Creative::tab_slot_position(slot)?)))
+                .collect()
+        };
+        for (slot, (sx, sy)) in slots {
+            let Some(stack) = game.slot_view(slot) else {
+                continue;
+            };
+            if crate::game::aei_glue::highlight(&stack.item) == Some(false) {
+                paint::fill(
+                    game,
+                    batch,
+                    [ox + sx, oy + sy, 16.0, 16.0],
+                    rgba(0, 0, 0, 0xA0),
+                );
+            }
+        }
+    }
     if let Some((items, layout)) = &screen.items {
         draw_items(game, batch, items, layout);
     } else if let Some(search) = game.panel.search.as_mut() {
