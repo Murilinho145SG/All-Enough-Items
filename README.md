@@ -82,6 +82,9 @@ through Horizon's native mod system.
 - For modpack makers, the settings page writes `report.md` in AEI's mod data
   folder: recipe counts by category, items no recipe makes or uses, and
   crafting recipes whose ingredients make different results.
+- Beyond JEI, a typed search can be pinned as a chip under the bookmarks with
+  its "+ Pin search" chip (eight at most): click a chip to search it again,
+  right-click it to forget it.
 - Beyond JEI, **Tab** puts a keyboard focus on the item list (search field
   unfocused): the arrows move it across pages, Enter opens the focused item's
   recipes and R, U, A, T and I act on it; Escape leaves it.

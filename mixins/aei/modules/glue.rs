@@ -1041,6 +1041,7 @@ pub(super) fn frame(game: &mut Game<'_>) {
                 .native_setting(model::ID, SETTING_NOTES)
                 .unwrap_or_default();
             browser.load_notes(&notes);
+            load_chips(game);
             browser.handle(model::Event::SetKnown(known.to_vec()), false, &[]);
             browser.handle(
                 model::Event::SetSpoilerFree(flag(game, SETTING_SPOILER)),
@@ -1359,6 +1360,9 @@ const SETTING_HIGHLIGHT: &str = "highlight_inventory";
 const SETTING_GROUPS: &str = "group_variants";
 const SETTING_DARK: &str = "dark_theme";
 const SETTING_NOTES: &str = "notes";
+const SETTING_CHIPS: &str = "search_chips";
+/// Saved searches (chips) at most.
+pub(super) const CHIPS: usize = 8;
 const SETTING_PINNED: &str = "pinned_recipes";
 const SETTING_PREVIEW: &str = "shift_preview";
 const SETTING_TRADES: &str = "trades";
@@ -2031,4 +2035,55 @@ pub(super) fn tag_uses(game: &mut Game<'_>, tag: &str) {
     for update in updates {
         publish(game, update);
     }
+}
+
+/// The saved searches (chips), oldest first.
+pub(super) fn chips() -> Vec<String> {
+    CHIP_LIST.with(|cell| cell.borrow().clone())
+}
+
+thread_local! {
+    static CHIP_LIST: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Reads the saved searches (once a session starts).
+fn load_chips(game: &Game<'_>) {
+    let list: Vec<String> = game
+        .native_setting(model::ID, SETTING_CHIPS)
+        .unwrap_or_default()
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .take(CHIPS)
+        .map(str::to_owned)
+        .collect();
+    CHIP_LIST.with(|cell| *cell.borrow_mut() = list);
+}
+
+fn save_chips(game: &mut Game<'_>) {
+    let text = chips().join("\n");
+    game.native_set_setting(model::ID, SETTING_CHIPS, &text);
+}
+
+/// Saves `query` as a chip.
+pub(super) fn pin_chip(game: &mut Game<'_>, query: &str) {
+    let query = query.trim().replace('\n', " ");
+    CHIP_LIST.with(|cell| {
+        let mut list = cell.borrow_mut();
+        if !query.is_empty() && !list.contains(&query) && list.len() < CHIPS {
+            list.push(query);
+        }
+    });
+    save_chips(game);
+}
+
+/// Forgets saved search `i`.
+pub(super) fn unpin_chip(game: &mut Game<'_>, i: usize) {
+    CHIP_LIST.with(|cell| {
+        let mut list = cell.borrow_mut();
+        if i < list.len() {
+            list.remove(i);
+        }
+    });
+    save_chips(game);
 }

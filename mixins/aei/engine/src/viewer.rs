@@ -629,6 +629,46 @@ pub fn recent_row(screen: [f32; 2], gui_left: f32, count: usize) -> Vec<Rect> {
         .collect()
 }
 
+/// A saved-search chip's height.
+pub const CHIP: f32 = 12.0;
+
+/// Saved-search chips of these widths, flowing left to right under the bookmarks and
+/// wrapping upwards from `bottom` (the screen's height less what is below them), all
+/// left of `gui_left`. A chip that doesn't fit is left out (`None`). The height they
+/// take, including a gap above them, comes back with them.
+pub fn chip_rows(gui_left: f32, bottom: f32, widths: &[f32]) -> (Vec<Option<Rect>>, f32) {
+    let right = gui_left.max(0.0) - PADDING;
+    let mut rows: Vec<Vec<(usize, f32)>> = vec![Vec::new()];
+    let mut x = PADDING;
+    for (i, &w) in widths.iter().enumerate() {
+        if PADDING + w > right {
+            continue;
+        }
+        if x + w > right {
+            rows.push(Vec::new());
+            x = PADDING;
+        }
+        rows.last_mut().expect("a row").push((i, x));
+        x += w + 2.0;
+    }
+    rows.retain(|row| !row.is_empty());
+    let mut rects = vec![None; widths.len()];
+    // The first row is the top one; the last sits on `bottom`.
+    let top = bottom - rows.len() as f32 * (CHIP + 2.0);
+    for (r, row) in rows.iter().enumerate() {
+        let y = top + r as f32 * (CHIP + 2.0);
+        for &(i, x) in row {
+            rects[i] = Some([x, y, widths[i], CHIP]);
+        }
+    }
+    let used = if rows.is_empty() {
+        0.0
+    } else {
+        rows.len() as f32 * (CHIP + 2.0) + 2.0
+    };
+    (rects, used)
+}
+
 /// The bookmark list left of a screen, as JEI shows it: a page bar over a grid, aligned
 /// to the screen's left edge.
 #[derive(Clone, Debug, PartialEq)]
@@ -941,5 +981,17 @@ mod tests {
         assert_eq!(card.slots[1].1, [22.0, 22.0, 18.0, 18.0]);
         assert_eq!(card.slots[2].1, [94.0, 18.0, 26.0, 26.0]);
         assert_eq!(card.empty.len(), 7);
+    }
+
+    #[test]
+    fn chips_wrap_upwards_left_of_the_gui() {
+        // 100 wide: 6 padding each side leaves 88 for chips.
+        let (rects, used) = super::chip_rows(100.0, 300.0, &[40.0, 40.0, 40.0, 200.0]);
+        assert_eq!(rects[0], Some([6.0, 272.0, 40.0, 12.0]));
+        assert_eq!(rects[1], Some([48.0, 272.0, 40.0, 12.0]));
+        assert_eq!(rects[2], Some([6.0, 286.0, 40.0, 12.0]));
+        assert_eq!(rects[3], None);
+        assert_eq!(used, 30.0);
+        assert_eq!(super::chip_rows(100.0, 300.0, &[]), (vec![], 0.0));
     }
 }

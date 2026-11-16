@@ -59,6 +59,26 @@ struct Screen {
     bookmarks: Option<BookmarkList>,
     /// The recently viewed row (an option), stack and cell each.
     recent: Vec<(BrowserStack, viewer::Rect)>,
+    /// Saved searches (chips) under the bookmarks, and the chip that pins the search.
+    chips: Vec<(Chip, viewer::Rect)>,
+}
+
+/// A saved-search chip.
+#[derive(Clone, Debug, PartialEq)]
+enum Chip {
+    /// Saved search `i`, its text.
+    Saved(usize, String),
+    /// Pins the typed search.
+    Pin(String),
+}
+
+impl Chip {
+    fn label(&self) -> String {
+        match self {
+            Chip::Saved(_, query) => query.clone(),
+            Chip::Pin(_) => "+ Pin search".to_owned(),
+        }
+    }
 }
 
 /// AEI's panel is up on a container screen.
@@ -180,6 +200,38 @@ fn screen(game: &Game<'_>, batch: &HudBatch, recipes: bool) -> Option<Screen> {
         viewer::SLOT + 4.0
     };
     let recent: Vec<_> = recent_stacks.into_iter().zip(cells).collect();
+    // Saved searches, and a chip that pins the typed one.
+    let saved = crate::game::aei_glue::chips();
+    let mut chips: Vec<Chip> = saved
+        .iter()
+        .enumerate()
+        .map(|(i, q)| Chip::Saved(i, q.clone()))
+        .collect();
+    let typed = game
+        .panel
+        .search
+        .as_ref()
+        .map(|s| s.value.trim().to_owned())
+        .unwrap_or_default();
+    if !typed.is_empty()
+        && !game.aei_editing_note()
+        && !saved.contains(&typed)
+        && saved.len() < crate::game::aei_glue::CHIPS
+    {
+        chips.push(Chip::Pin(typed));
+    }
+    let font = &game.gui.atlas.font;
+    let widths: Vec<f32> = chips
+        .iter()
+        .map(|chip| (font.width(&chip.label()) + 6.0).min(left))
+        .collect();
+    let (rects, used) = viewer::chip_rows(left, size[1] - 6.0 - reserved, &widths);
+    let reserved = reserved + used;
+    let chips: Vec<_> = chips
+        .into_iter()
+        .zip(rects)
+        .filter_map(|(chip, rect)| Some((chip, rect?)))
+        .collect();
     // Another collection than the first shows even while empty, to switch back.
     let mut count = crate::game::aei_glue::bookmark_count();
     if crate::game::aei_glue::bookmark_list() != 0 {
@@ -192,6 +244,7 @@ fn screen(game: &Game<'_>, batch: &HudBatch, recipes: bool) -> Option<Screen> {
         items,
         bookmarks,
         recent,
+        chips,
     })
 }
 
@@ -1502,6 +1555,27 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
         paint::slot(game, batch, *rect);
         draw_stack(game, batch, stack, *rect, &format!("Recent {i}"), true);
     }
+    for (chip, rect) in &screen.chips {
+        let hovered = viewer::contains(*rect, game.cursor);
+        let back = match (chip, hovered) {
+            (Chip::Pin(_), false) => rgba(40, 70, 40, 220),
+            (Chip::Pin(_), true) => rgba(60, 110, 60, 240),
+            (_, false) => rgba(50, 50, 70, 220),
+            (_, true) => rgba(80, 80, 140, 240),
+        };
+        paint::fill(game, batch, *rect, back);
+        let [x, y, w, _] = *rect;
+        let mut label = chip.label();
+        while label.chars().count() > 1 && game.gui.atlas.font.width(&label) > w - 6.0 {
+            label.pop();
+        }
+        batch.text(&game.gui.atlas, &label, x + 3.0, y + 2.0, u32::MAX, false);
+        let name = match chip {
+            Chip::Saved(i, query) => format!("Search chip {i}: {query}"),
+            Chip::Pin(_) => "Pin search".to_owned(),
+        };
+        horizon_client::widgets::record(&name, *rect, true);
+    }
 
     let cursor = game.cursor;
     // A category tab names its category; every other icon shows its item.
@@ -2027,6 +2101,21 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
         .find(|(_, rect)| viewer::contains(*rect, game.cursor))
     {
         crate::game::aei_glue::lookup(game, stack, right);
+        return ControlFlow::Break(true);
+    }
+    // A chip runs its search (right-click forgets it); the pin chip saves the search.
+    if let Some((chip, _)) = screen
+        .chips
+        .iter()
+        .find(|(_, rect)| viewer::contains(*rect, game.cursor))
+    {
+        match (chip, right) {
+            (Chip::Saved(i, _), true) => crate::game::aei_glue::unpin_chip(game, *i),
+            (Chip::Saved(_, query), false) => game.aei_set_search(query),
+            (Chip::Pin(query), _) => crate::game::aei_glue::pin_chip(game, query),
+        }
+        game.audio
+            .play("minecraft:ui.button.click", None, 0.25, 1.0);
         return ControlFlow::Break(true);
     }
     if let Some(list) = &screen.bookmarks
