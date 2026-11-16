@@ -901,9 +901,17 @@ fn draw_items(game: &mut Game<'_>, batch: &mut HudBatch, items: &Sidebar, layout
     paint::arrow_button(game, batch, forward, true, pages > 1, "Next item page");
 
     if let Some((item, _)) = NOTE_EDIT.with(|cell| cell.borrow().clone()) {
-        let name = game.pack.names.display_item(&item).to_string();
         let [x, y, _, _] = items.search;
-        let hint = format!("Note on {name}: Enter saves, Esc cancels");
+        let hint = match item.strip_prefix("aei:list/") {
+            Some(list) => format!(
+                "Name of bookmark list {}: Enter saves, Esc cancels",
+                list.parse::<usize>().unwrap_or(0) + 1
+            ),
+            None => format!(
+                "Note on {}: Enter saves, Esc cancels",
+                game.pack.names.display_item(&item)
+            ),
+        };
         batch.text(
             &game.gui.atlas,
             &hint,
@@ -988,8 +996,16 @@ fn draw_bookmarks(game: &mut Game<'_>, batch: &mut HudBatch, list: &BookmarkList
     let [x, y, w, h] = list.nav;
     paint::strip(game, batch, [x + back[2], y, w - back[2] - forward[2], h]);
     // Which collection (bookmark list) shows; clicking the label switches it.
-    let collection = crate::game::aei_glue::bookmark_list() + 1;
-    let label = format!("L{collection} \u{b7} {}/{}", page + 1, pages);
+    let list_index = crate::game::aei_glue::bookmark_list();
+    let mut label = format!(
+        "{} \u{b7} {}/{}",
+        crate::game::aei_glue::list_name(game, list_index),
+        page + 1,
+        pages
+    );
+    if game.gui.atlas.font.width(&label) > w - back[2] - forward[2] {
+        label = format!("L{} \u{b7} {}/{}", list_index + 1, page + 1, pages);
+    }
     horizon_client::widgets::record(
         "Switch bookmark list",
         [x + back[2], y, w - back[2] - forward[2], h],
@@ -2008,6 +2024,28 @@ pub(super) fn press(game: &mut Game<'_>, right: bool) -> ControlFlow<bool> {
                 .play("minecraft:ui.button.click", None, 0.25, 1.0);
             return ControlFlow::Break(true);
         }
+        if right && viewer::contains(list.nav, game.cursor) {
+            // Right-click names the list, typed in the search field.
+            let list = crate::game::aei_glue::bookmark_list();
+            let mut name = crate::game::aei_glue::list_name(game, list);
+            // A list not named yet starts blank.
+            if name == format!("L{}", list + 1) {
+                name.clear();
+            }
+            let query = game
+                .panel
+                .search
+                .as_ref()
+                .map(|s| s.value.clone())
+                .unwrap_or_default();
+            NOTE_EDIT.with(|cell| *cell.borrow_mut() = Some((format!("aei:list/{list}"), query)));
+            if let Some(search) = game.panel.search.as_mut() {
+                search.set_value(&name);
+                search.focused = true;
+                search.reset_blink();
+            }
+            return ControlFlow::Break(true);
+        }
         if viewer::contains(list.nav, game.cursor) {
             crate::game::aei_glue::cycle_bookmark_list(game);
             BOOKMARK_PAGE.with(|cell| *cell.borrow_mut() = 0);
@@ -2259,8 +2297,38 @@ impl Game<'_> {
             .as_ref()
             .map(|s| s.value.clone())
             .unwrap_or_default();
-        crate::game::aei_glue::save_note(self, &item, &text);
+        match item.strip_prefix("aei:list/").and_then(|i| i.parse().ok()) {
+            Some(list) => crate::game::aei_glue::set_list_name(self, list, &text),
+            None => crate::game::aei_glue::save_note(self, &item, &text),
+        }
         self.aei_set_search(&query);
+        if let Some(search) = self.panel.search.as_mut() {
+            search.focused = false;
+        }
+        true
+    }
+
+    /// Ctrl+C over the bookmark bar's label copies the shown list as text; Ctrl+V
+    /// replaces it with a list from the clipboard.
+    pub(in crate::game) fn aei_collection_key(&mut self, key: &str) -> bool {
+        if owned(self).is_none() || !self.has_control_down() || self.mod_browser_typing() {
+            return false;
+        }
+        let Some(batch) = self.browser_batch() else {
+            return false;
+        };
+        let recipes = self.panel.recipes.is_some();
+        let over = screen(self, &batch, recipes)
+            .and_then(|screen| screen.bookmarks)
+            .is_some_and(|list| viewer::contains(list.nav, self.cursor));
+        if !over {
+            return false;
+        }
+        match key {
+            "key.keyboard.c" => crate::game::aei_glue::export_collection(self),
+            "key.keyboard.v" => crate::game::aei_glue::import_collection(self),
+            _ => return false,
+        }
         true
     }
 

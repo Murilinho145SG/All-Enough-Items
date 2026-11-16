@@ -56,6 +56,42 @@ impl Browser {
         format(&self.bookmarks)
     }
 
+    /// The shown bookmarks as a collection to share as text: a `# name` line, then
+    /// one bookmark per line, as [`Browser::import_collection`] reads it.
+    pub fn collection_text(&self, name: &str) -> String {
+        format!("# {}\n{}", name.trim(), format(&self.bookmarks))
+    }
+
+    /// Replaces the shown bookmarks with a shared collection: lines as
+    /// [`Browser::collection_text`] writes them, or plain item ids one per line. The
+    /// collection's name (its `# name` line), if any, comes back with the update; text
+    /// with no bookmark in it changes nothing.
+    pub fn import_collection(&mut self, text: &str) -> Option<(Option<String>, Update)> {
+        let name = text
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("# "))
+            .map(|name| name.trim().to_owned())
+            .filter(|name| !name.is_empty());
+        let lines: String = text
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.starts_with('#') && !line.is_empty())
+            .map(|line| {
+                if line.contains('\t') {
+                    format!("{line}\n")
+                } else {
+                    format!("item\t{line}\t\n")
+                }
+            })
+            .collect();
+        let bookmarks = parse(&lines);
+        if bookmarks.is_empty() {
+            return None;
+        }
+        self.bookmarks = bookmarks;
+        Some((name, Update::Bookmarks(self.bookmarks.clone())))
+    }
+
     fn changed(&self) -> Vec<Update> {
         vec![Update::Bookmarks(self.bookmarks.clone())]
     }
@@ -158,6 +194,32 @@ impl Browser {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn collections_round_trip_as_text() {
+        let (mut browser, _) = crate::Browser::new(Vec::new(), Vec::new());
+        browser.load_bookmarks(
+            "item\tminecraft:stone\t\nrecipe\tminecraft:stick\t\tminecraft:stick\n",
+        );
+        let text = browser.collection_text(" Redstone ");
+        assert!(text.starts_with("# Redstone\n"));
+        let saved = browser.bookmarks_text();
+        browser.load_bookmarks("");
+        let (name, _) = browser.import_collection(&text).unwrap();
+        assert_eq!(name.as_deref(), Some("Redstone"));
+        assert_eq!(browser.bookmarks_text(), saved);
+        // Plain ids, one per line, import too; text with none changes nothing.
+        let (name, _) = browser
+            .import_collection("minecraft:dirt\n\nminecraft:sand")
+            .unwrap();
+        assert_eq!(name, None);
+        assert_eq!(
+            browser.bookmarks_text(),
+            "item\tminecraft:dirt\t\nitem\tminecraft:sand\t\n"
+        );
+        assert!(browser.import_collection("hello there").is_none());
+        assert_eq!(browser.bookmarks_text().lines().count(), 2);
+    }
+
     use super::*;
 
     #[test]

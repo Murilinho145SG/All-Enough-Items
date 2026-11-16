@@ -34,6 +34,8 @@ std::thread_local! {
 
 const SETTING_BOOKMARKS: &str = "bookmarks";
 const SETTING_BOOKMARK_LIST: &str = "bookmark_list";
+/// The lists' names, one `<number>=<name>` per line.
+const SETTING_BOOKMARK_NAMES: &str = "bookmark_names";
 /// Bookmark lists (collections) a player can switch between.
 const BOOKMARK_LISTS: usize = 3;
 static BOOKMARK_LIST: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
@@ -1930,4 +1932,72 @@ pub(super) fn shown_card(card: usize) -> Option<(model::RecipeCard, &'static str
 /// Saves the pinned recipes' ids, one per line.
 pub(super) fn save_pinned(game: &mut Game<'_>, ids: &[String]) {
     game.native_set_setting(model::ID, SETTING_PINNED, &ids.join("\n"));
+}
+
+/// Bookmark list `list`'s name: the player's, or "L1", "L2", ...
+pub(super) fn list_name(game: &Game<'_>, list: usize) -> String {
+    game.native_setting(model::ID, SETTING_BOOKMARK_NAMES)
+        .unwrap_or_default()
+        .lines()
+        .find_map(|line| {
+            let (number, name) = line.split_once('=')?;
+            (number.trim().parse::<usize>().ok()? == list + 1).then(|| name.trim().to_owned())
+        })
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| format!("L{}", list + 1))
+}
+
+/// Names bookmark list `list` (a blank name brings back "L1", ...).
+pub(super) fn set_list_name(game: &mut Game<'_>, list: usize, name: &str) {
+    let names: Vec<String> = (0..BOOKMARK_LISTS)
+        .filter_map(|i| {
+            let name = if i == list {
+                name.trim().replace(['\n', '='], " ")
+            } else {
+                list_name(game, i)
+            };
+            (name != format!("L{}", i + 1) && !name.is_empty()).then(|| format!("{}={name}", i + 1))
+        })
+        .collect();
+    game.native_set_setting(model::ID, SETTING_BOOKMARK_NAMES, &names.join("\n"));
+}
+
+/// Copies the shown bookmark list as text, its name first.
+pub(super) fn export_collection(game: &mut Game<'_>) {
+    use horizon_client::clipboard::Clipboard;
+    let name = list_name(game, bookmark_list());
+    if let Some(text) = with_browser(|browser| browser.collection_text(&name)) {
+        let count = text.lines().count().saturating_sub(1);
+        game.clipboard.set(&text);
+        game.message = Some((
+            format!("Copied bookmark list {name} ({count} bookmarks)"),
+            std::time::Instant::now(),
+        ));
+    }
+}
+
+/// Replaces the shown bookmark list with one from the clipboard (named by it).
+pub(super) fn import_collection(game: &mut Game<'_>) {
+    use horizon_client::clipboard::Clipboard;
+    let text = game.clipboard.get();
+    let Some(Some((name, update))) = with_browser(|browser| browser.import_collection(&text))
+    else {
+        game.message = Some((
+            "The clipboard holds no bookmarks".to_owned(),
+            std::time::Instant::now(),
+        ));
+        return;
+    };
+    if let Some(name) = name {
+        set_list_name(game, bookmark_list(), &name);
+    }
+    let count = match &update {
+        model::Update::Bookmarks(list) => list.len(),
+        _ => 0,
+    };
+    publish(game, update);
+    game.message = Some((
+        format!("Imported {count} bookmarks"),
+        std::time::Instant::now(),
+    ));
 }
