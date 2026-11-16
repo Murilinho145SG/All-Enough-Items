@@ -1426,3 +1426,8 @@ pub(super) fn preview(target: &NativeStack) -> Option<(model::RecipeCard, &'stat
     }
     with_browser(|browser| browser.preview(&stack(target))).flatten()
 }
+
+/// Card `card` of the shown page, to pin: its card, station and recipe id.
+pub(super) fn shown_card(card: usize) -> Option<(model::RecipeCard, &'static str, String)> {
+    with_browser(|browser| browser.shown_card(card)).flatten()
+}

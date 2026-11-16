@@ -2,6 +2,9 @@ fn aei_history_key(game: &mut crate::game::Game<'_>, key: &str) -> std::ops::Con
     if game.title.is_none() && crate::game::aei_glue::search_key(game, key) {
         return std::ops::ControlFlow::Break(());
     }
+    if game.title.is_none() && key == "key.keyboard.p" && game.aei_pin_key() {
+        return std::ops::ControlFlow::Break(());
+    }
     if game.title.is_none() && game.aei_list_key(key) {
         return std::ops::ControlFlow::Break(());
     }

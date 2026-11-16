@@ -95,6 +95,18 @@ pub(crate) fn compost_note(chance: f32) -> String {
 }
 
 impl Browser {
+    /// Card `card` of the shown page, to pin beside the screen: its card, the station
+    /// whose category draws it, and its recipe id.
+    pub fn shown_card(&self, card: usize) -> Option<(RecipeCard, &'static str, String)> {
+        let &id = self.shown_recipe_ids.get(card)?;
+        let recipe = &self.recipes[id];
+        Some((
+            self.make_card(recipe, &[]),
+            Station::of(recipe.kind).icon(),
+            recipe.id.clone(),
+        ))
+    }
+
     /// The preview of `stack`'s first recipe (crafting first): its card and the
     /// station whose category draws it.
     pub fn preview(&self, stack: &Stack) -> Option<(RecipeCard, &'static str)> {

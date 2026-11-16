@@ -28,6 +28,9 @@ struct Navigation {
 thread_local! {
     static ITEM_SCROLL: RefCell<i32> = const { RefCell::new(0) };
     static BOOKMARK_PAGE: RefCell<usize> = const { RefCell::new(0) };
+    /// Recipes pinned beside the screen (P over a card): card, station, recipe id.
+    static PINNED: RefCell<Vec<(crate::game::aei::RecipeCard, &'static str, String)>> =
+        const { RefCell::new(Vec::new()) };
     /// Keyboard focus in the item list (Tab): the focused entry's index.
     static KB_FOCUS: RefCell<Option<usize>> = const { RefCell::new(None) };
     /// The material calculator while it is open: its targets (a shopping list) with
@@ -426,9 +429,7 @@ fn draw_preview(
     card: &crate::game::aei::RecipeCard,
     station: &str,
 ) {
-    let category = Category::of(card.layout, station);
-    let (cw, ch) = category.size();
-    let (w, h) = (cw + 8.0, ch + 8.0);
+    let (w, h) = card_size(card, station);
     let (cx, cy) = game.cursor;
     let x = if cx - w - 8.0 >= 0.0 {
         cx - w - 8.0
@@ -436,6 +437,78 @@ fn draw_preview(
         cx + 12.0
     };
     let y = (cy - h / 2.0).clamp(0.0, (batch.height - h).max(0.0));
+    draw_card_at(game, batch, card, station, x, y, "Preview");
+}
+
+/// A recipe card's plate size.
+fn card_size(card: &crate::game::aei::RecipeCard, station: &str) -> (f32, f32) {
+    let (cw, ch) = Category::of(card.layout, station).size();
+    (cw + 8.0, ch + 8.0)
+}
+
+/// The pinned recipes' plates, stacked up from the bottom left of the screen.
+fn pinned_rects(batch: &HudBatch) -> Vec<viewer::Rect> {
+    PINNED.with(|cell| {
+        let mut y = batch.height - 6.0;
+        cell.borrow()
+            .iter()
+            .map(|(card, station, _)| {
+                let (w, h) = card_size(card, station);
+                y -= h + 2.0;
+                [6.0, y, w, h]
+            })
+            .collect()
+    })
+}
+
+/// Pins the card under the pointer, or unpins the pinned card under it (P).
+fn toggle_pin(game: &mut Game<'_>, batch: &HudBatch) -> bool {
+    let cursor = game.cursor;
+    if let Some(i) = pinned_rects(batch)
+        .iter()
+        .position(|rect| viewer::contains(*rect, cursor))
+    {
+        PINNED.with(|cell| cell.borrow_mut().remove(i));
+        return true;
+    }
+    let Some(card) = game.aei_hovered_card() else {
+        return false;
+    };
+    let Some(pin) = crate::game::aei_glue::shown_card(card) else {
+        return false;
+    };
+    PINNED.with(|cell| {
+        let mut pinned = cell.borrow_mut();
+        if !pinned.iter().any(|(_, _, id)| *id == pin.2) {
+            pinned.push(pin);
+            // Two at most: the oldest goes.
+            if pinned.len() > 2 {
+                pinned.remove(0);
+            }
+        }
+    });
+    true
+}
+
+fn draw_pinned(game: &mut Game<'_>, batch: &mut HudBatch) {
+    let pinned = PINNED.with(|cell| cell.borrow().clone());
+    for ((card, station, _), rect) in pinned.iter().zip(pinned_rects(batch)) {
+        draw_card_at(game, batch, card, station, rect[0], rect[1], "Pinned");
+    }
+}
+
+/// Draws a recipe card at `x`, `y` as the recipe window draws its cards, without
+/// animations; its stacks are recorded under `name`.
+fn draw_card_at(
+    game: &mut Game<'_>,
+    batch: &mut HudBatch,
+    card: &crate::game::aei::RecipeCard,
+    station: &str,
+    x: f32,
+    y: f32,
+    name: &str,
+) {
+    let category = Category::of(card.layout, station);
     let geometry = viewer::Card::new(category, card.width, card.height, card.inputs.len(), x, y);
     paint::plate(game, batch, geometry.area);
     for rect in &geometry.empty {
@@ -459,7 +532,7 @@ fn draw_preview(
                 .and_then(|alternatives| alternatives.first())
         };
         if let Some(stack) = stack {
-            draw_stack(game, batch, &native(stack), *rect, "Preview", false);
+            draw_stack(game, batch, &native(stack), *rect, name, false);
         }
     }
 }
@@ -1374,6 +1447,7 @@ pub(super) fn draw(game: &mut Game<'_>, batch: &mut HudBatch) -> ControlFlow<()>
     if let Some(list) = &screen.bookmarks {
         draw_bookmarks(game, batch, list);
     }
+    draw_pinned(game, batch);
     for (i, (stack, rect)) in screen.recent.iter().enumerate() {
         paint::slot(game, batch, *rect);
         draw_stack(game, batch, stack, *rect, &format!("Recent {i}"), true);
@@ -2136,6 +2210,17 @@ impl Game<'_> {
         crate::game::aei_glue::save_note(self, &item, &text);
         self.aei_set_search(&query);
         true
+    }
+
+    /// P over a recipe card pins it beside the screen (P over a pinned one unpins it).
+    pub(in crate::game) fn aei_pin_key(&mut self) -> bool {
+        if owned(self).is_none() || self.mod_browser_typing() {
+            return false;
+        }
+        let Some(batch) = self.browser_batch() else {
+            return false;
+        };
+        toggle_pin(self, &batch)
     }
 
     /// AEI's dark theme (an option).
